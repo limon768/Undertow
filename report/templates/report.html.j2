@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recon Report — {{ target }}</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #161c24;
+    --border: #263140;
+    --text: #d8e1e8;
+    --muted: #8492a1;
+    --accent: #4fb3d9;
+    --ok: #4caf7d;
+    --warn: #d9a94f;
+    --danger: #d95f5f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 32px 48px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, #131a22, #0f1419);
+  }
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 24px;
+    color: #fff;
+  }
+  header .target {
+    color: var(--accent);
+    font-weight: 600;
+  }
+  header .meta {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 8px;
+  }
+  main {
+    padding: 32px 48px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  section {
+    margin-bottom: 40px;
+  }
+  section h2 {
+    font-size: 16px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+    margin-bottom: 16px;
+  }
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+  }
+  .summary-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+  }
+  .summary-card .num {
+    font-size: 28px;
+    font-weight: 700;
+    color: #fff;
+  }
+  .summary-card .label {
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  th, td {
+    text-align: left;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    color: var(--muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  tr:last-child td {
+    border-bottom: none;
+  }
+  tbody tr:hover {
+    background: #1c2430;
+  }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .badge.status-2 { background: rgba(76,175,125,0.15); color: var(--ok); }
+  .badge.status-3 { background: rgba(217,169,79,0.15); color: var(--warn); }
+  .badge.status-4, .badge.status-5 { background: rgba(217,95,95,0.15); color: var(--danger); }
+  .empty {
+    color: var(--muted);
+    font-style: italic;
+    padding: 12px 0;
+  }
+  .host-block {
+    margin-bottom: 20px;
+  }
+  .host-block h3 {
+    font-size: 13px;
+    color: #fff;
+    margin: 0 0 8px;
+  }
+  footer {
+    padding: 24px 48px;
+    color: var(--muted);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  code {
+    background: #1c2430;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+  }
+  .sev {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  .sev.critical { background: rgba(217,95,95,0.2); color: #ff6b6b; }
+  .sev.high { background: rgba(217,95,95,0.15); color: var(--danger); }
+  .sev.medium { background: rgba(217,169,79,0.15); color: var(--warn); }
+  .sev.low { background: rgba(76,175,125,0.15); color: var(--ok); }
+  .sev.info { background: rgba(79,179,217,0.15); color: var(--accent); }
+  .screenshot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .screenshot-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+  }
+  .screenshot-card .host {
+    font-size: 12px;
+    color: #fff;
+    margin-bottom: 6px;
+    word-break: break-all;
+  }
+  .screenshot-card .placeholder {
+    height: 100px;
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: center;
+    padding: 8px;
+  }
+  .screenshot-card .path {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 6px;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>External Recon Report</h1>
+  <div>Target: <span class="target">{{ target }}</span></div>
+  <div class="meta">Generated {{ generated_at }}</div>
+</header>
+
+<main>
+  <section>
+    <h2>Summary</h2>
+    <div class="summary-grid">
+      <div class="summary-card">
+        <div class="num">{{ data.subdomains|length }}</div>
+        <div class="label">Subdomains</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">{{ data.http_results|length }}</div>
+        <div class="label">Live HTTP Hosts</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">{{ open_port_count }}</div>
+        <div class="label">Open Ports</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">{{ data.dns|length }}</div>
+        <div class="label">DNS Record Types</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>DNS Records</h2>
+    {% if data.dns %}
+    <table>
+      <thead><tr><th>Type</th><th>Value</th></tr></thead>
+      <tbody>
+      {% for rtype, values in data.dns.items() %}
+        <tr><td>{{ rtype }}</td><td>{{ values|join(", ") }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No DNS records resolved.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>WHOIS</h2>
+    {% if data.whois and data.whois.fields %}
+    <table>
+      <thead><tr><th>Field</th><th>Value</th></tr></thead>
+      <tbody>
+      {% for field, value in data.whois.fields.items() %}
+        <tr>
+          <td>{{ field }}</td>
+          <td>{{ value if value is string else value|join(", ") }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No WHOIS data available.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Subdomains ({{ data.subdomains|length }})</h2>
+    {% if data.subdomains %}
+    <table>
+      <thead><tr><th>Subdomain</th></tr></thead>
+      <tbody>
+      {% for sub in data.subdomains %}
+        <tr><td><code>{{ sub }}</code></td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No subdomains discovered.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>HTTP Probe Results</h2>
+    {% if data.http_results %}
+    <table>
+      <thead><tr><th>URL</th><th>Status</th><th>Title</th><th>Server</th><th>Tech</th></tr></thead>
+      <tbody>
+      {% for r in data.http_results %}
+        <tr>
+          <td><code>{{ r.url }}</code></td>
+          <td><span class="badge status-{{ (r.status_code|string)[0] }}">{{ r.status_code }}</span></td>
+          <td>{{ r.title }}</td>
+          <td>{{ r.webserver }}</td>
+          <td>{{ r.tech|join(", ") if r.tech else "" }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No live HTTP hosts found.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Port Scan Results</h2>
+    {% if data.port_results %}
+      {% for host, ports in data.port_results.items() %}
+      <div class="host-block">
+        <h3>{{ host }}</h3>
+        {% if ports %}
+        <table>
+          <thead><tr><th>Port</th><th>Protocol</th><th>Service</th><th>Product</th><th>Version</th></tr></thead>
+          <tbody>
+          {% for p in ports %}
+            <tr>
+              <td>{{ p.port }}</td>
+              <td>{{ p.protocol }}</td>
+              <td>{{ p.service }}</td>
+              <td>{{ p.product }}</td>
+              <td>{{ p.version }}</td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}
+        <div class="empty">No open ports found.</div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="empty">No port scan data available.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Scope Filtering</h2>
+    {% if data.scope %}
+    <div class="summary-grid" style="margin-bottom:16px;">
+      <div class="summary-card">
+        <div class="num">{{ data.scope.total_discovered }}</div>
+        <div class="label">Discovered</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">{{ data.scope.in_scope|length }}</div>
+        <div class="label">In-Scope</div>
+      </div>
+      <div class="summary-card">
+        <div class="num">{{ data.scope.total_discovered - data.scope.in_scope|length }}</div>
+        <div class="label">Out-of-Scope (dropped)</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Host</th><th>IP</th></tr></thead>
+      <tbody>
+      {% for pair in data.scope.in_scope %}
+        <tr><td><code>{{ pair.host }}</code></td><td>{{ pair.ip }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No scope-filtering data available.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>WordPress (WPScan)</h2>
+    {% if data.wpscan %}
+    <table>
+      <thead><tr><th>Site</th><th>Finding</th><th>Severity</th><th>Detail</th></tr></thead>
+      <tbody>
+      {% for f in data.wpscan %}
+        <tr>
+          <td><code>{{ f.site }}</code></td>
+          <td>{{ f.finding }}</td>
+          <td><span class="sev {{ f.severity|lower }}">{{ f.severity }}</span></td>
+          <td>{{ f.detail }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No WordPress findings.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>JS Secret Scan</h2>
+    {% if data.js_secrets %}
+    <table>
+      <thead><tr><th>Source</th><th>Type</th><th>Match</th></tr></thead>
+      <tbody>
+      {% for s in data.js_secrets %}
+        <tr>
+          <td><code>{{ s.url }}</code></td>
+          <td>{{ s.type }}</td>
+          <td><code>{{ s.match }}</code></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No secrets identified in JS analysis.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Cloud Assets</h2>
+    {% if data.cloud_assets %}
+    <table>
+      <thead><tr><th>Provider</th><th>Resource</th><th>Status</th></tr></thead>
+      <tbody>
+      {% for c in data.cloud_assets %}
+        <tr>
+          <td>{{ c.provider }}</td>
+          <td><code>{{ c.resource }}</code></td>
+          <td><span class="badge status-{{ '2' if c.status == 'Public' else '4' }}">{{ c.status }}</span></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No cloud assets identified.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>OSINT / Email Gathering</h2>
+    {% if data.emails %}
+    <table>
+      <thead><tr><th>Email</th><th>Source</th></tr></thead>
+      <tbody>
+      {% for e in data.emails %}
+        <tr><td><code>{{ e.email }}</code></td><td>{{ e.source }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="empty">No emails gathered.</div>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Screenshots (EyeWitness)</h2>
+    {% if data.screenshots %}
+    <div class="screenshot-grid">
+      {% for shot in data.screenshots %}
+      <div class="screenshot-card">
+        <div class="host">{{ shot.host }}</div>
+        <div class="placeholder">Screenshot not rendered in this preview</div>
+        <div class="path">{{ shot.path }}</div>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty">No screenshots captured.</div>
+    {% endif %}
+  </section>
+</main>
+
+<footer>
+  Generated by UNDERTOW — for authorized security assessment use only.
+</footer>
+</body>
+</html>

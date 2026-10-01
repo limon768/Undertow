@@ -1,0 +1,5 @@
+www.example.com
+portal.example.com
+vpn.example.com
+dev.example.com
+api.example.com

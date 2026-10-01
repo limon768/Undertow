@@ -1,0 +1,1 @@
+https://www.example.com/old-promo?id=1&next=https://example.net

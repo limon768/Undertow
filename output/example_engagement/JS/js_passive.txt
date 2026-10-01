@@ -1,0 +1,1 @@
+https://www.example.com/static/legacy/auth-2023.js

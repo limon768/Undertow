@@ -1,0 +1,16 @@
+# output/ holds both throwaway generated reports (ignored) and the checked-in
+# design-reference mocks CLAUDE.md calls essential reading (tracked below).
+output/*
+!output/example_engagement/
+!output/example_report_v2.html
+.venv/
+tools/
+tmp/
+__pycache__/
+*.log
+*.pyc
+
+# Real engagement directories (e.g. Client_Name_YYYYMMDD/) must never be
+# committed — this repo is the tool, not a record of any engagement's data.
+# Add specific engagement folder names here if one ever gets created inside
+# the repo by accident instead of its own location.

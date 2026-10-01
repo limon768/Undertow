@@ -1,0 +1,3 @@
+https://www.example.com/static/legacy/auth-2023.js
+https://www.example.com/old-promo?id=1
+https://www.example.com/2019/press-release.html

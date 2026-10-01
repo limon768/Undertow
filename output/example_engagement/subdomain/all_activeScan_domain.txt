@@ -1,0 +1,3 @@
+internal.example.com
+test.example.com
+vpn.example.com

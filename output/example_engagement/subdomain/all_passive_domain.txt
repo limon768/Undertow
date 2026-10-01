@@ -1,0 +1,11 @@
+api.example.com
+blog.example.com
+cdn.example.com
+dev.example.com
+mail.example.com
+old-mail.example.com
+portal.example.com
+staging.example.com
+test.example.com
+vpn.example.com
+www.example.com

@@ -1,0 +1,6 @@
+https://www.example.com/
+https://www.example.com/about
+https://portal.example.com/login
+https://portal.example.com/api/internal/admin/reset-password
+https://www.example.com/search?q=test
+https://www.example.com/old-promo?id=1&next=https://example.net

@@ -1,0 +1,4 @@
+/admin           [301]
+/api             [200]
+/.env.bak        [200]  <-- sensitive
+/backup.zip      [200]  <-- sensitive

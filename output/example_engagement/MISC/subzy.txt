@@ -1,0 +1,3 @@
+# Subdomain                                    Likelihood   Detail
+dev.example.com -> old-saas-provider.io         85%          provider-side resource confirmed unclaimed
+vpn.example.com                                 0%           CNAME resolves to owned infrastructure

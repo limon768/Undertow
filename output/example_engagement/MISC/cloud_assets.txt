@@ -1,0 +1,2 @@
+AWS S3   | example-corp-backups.s3.amazonaws.com | PUBLIC (listable)
+Azure    | examplecorpassets.blob.core.windows.net | private

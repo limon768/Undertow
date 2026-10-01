@@ -1,0 +1,1 @@
+portal.example.com/.git/ -> 404 (not exposed)

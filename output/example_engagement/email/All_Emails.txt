@@ -1,0 +1,4 @@
+j.doe@example.com        (crosslinked - LinkedIn)
+a.smith@example.com      (crosslinked - LinkedIn)
+admin@example.com        (metagoofil - PDF metadata)
+support@example.com      (bridgekeeper)

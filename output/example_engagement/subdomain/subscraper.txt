@@ -1,0 +1,7 @@
+www.example.com
+portal.example.com
+dev.example.com
+vpn.example.com
+blog.example.com
+old-mail.example.com
+staging.example.com

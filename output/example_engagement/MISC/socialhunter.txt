@@ -1,0 +1,2 @@
+# Asset               Broken link                          Detail
+www.example.com       https://twitter.com/examplecorp        account suspended - handle available for squatting

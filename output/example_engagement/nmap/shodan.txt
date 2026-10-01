@@ -1,0 +1,2 @@
+203.0.113.11 | org: Example Corp | vulns: CVE-2019-0708 (BlueKeep, unconfirmed — verify manually)
+203.0.113.10 | org: Example Corp | vulns: none indexed

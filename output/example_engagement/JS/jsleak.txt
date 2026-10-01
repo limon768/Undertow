@@ -1,0 +1,3 @@
+[secret] https://www.example.com/static/app.min.js : AWS Access Key -> AKIAFAKEEXAMPLE1234 (redacted/fake)
+[secret] https://portal.example.com/assets/config.js : Hardcoded API Token -> sk_live_FAKE00000000 (redacted/fake)
+[link]   https://portal.example.com/assets/config.js : /api/internal/admin/reset-password

@@ -1,0 +1,2 @@
+# Asset                    Hash found?   Detail
+203.0.113.10:500/udp       Yes           Aggressive mode enabled - PSK hash retrievable

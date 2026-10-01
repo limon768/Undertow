@@ -1,0 +1,7 @@
+www.example.com [200] [Example Corp] [203.0.113.10]
+portal.example.com [200] [Employee Portal] [203.0.113.11]
+vpn.example.com [403] [] [203.0.113.10]
+dev.example.com [301] [] [198.51.100.10]
+api.example.com [200] [] [198.51.100.11]
+old-mail.example.com [200] [Roundcube Webmail] [192.0.2.55]
+internal.example.com [200] [Jenkins] [192.0.2.56]

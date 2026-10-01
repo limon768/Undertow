@@ -1,0 +1,649 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>External Recon Report — {{ target }}</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+    --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
+    --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
+    --status-warning-text: #8a5c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+      --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+      --status-warning-text: var(--status-warning);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --status-warning-text: var(--status-warning);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 24px 40px;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0 0 2px; font-size: 20px; }
+  header .meta { color: var(--text-muted); font-size: 12px; }
+  nav.tabs { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--gridline); flex-wrap: wrap; }
+  nav.tabs button {
+    background: none; border: none; padding: 10px 16px; font-size: 13px;
+    color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent;
+    font-family: inherit;
+  }
+  nav.tabs button.active { color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600; }
+  nav.tabs button:hover { color: var(--text-primary); }
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 40px 80px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .stat-tile .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat-tile .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+  .stat-tile.hero { grid-column: span 2; }
+  .stat-tile.hero .value { font-size: 40px; color: var(--status-critical); }
+
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+  .panel h3 { font-size: 12px; color: var(--text-primary); margin: 0 0 8px; }
+
+  .sev-bar-row, .vt-bar-row { display: grid; grid-template-columns: 190px 1fr 32px; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sev-bar-label, .vt-bar-label { font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  .sev-bar-track, .vt-bar-track { height: 20px; background: var(--gridline); border-radius: 4px; overflow: hidden; }
+  .sev-bar-fill, .vt-bar-fill { height: 100%; border-radius: 4px; }
+  .sev-bar-count, .vt-bar-count { font-size: 12px; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+  .sev-bar-fill.critical { background: var(--status-critical); }
+  .sev-bar-fill.high { background: var(--status-serious); }
+  .sev-bar-fill.medium { background: var(--status-warning); }
+  .sev-bar-fill.low { background: var(--status-good); }
+  .sev-bar-fill.info { background: var(--text-muted); }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .status-dot.critical { background: var(--status-critical); }
+  .status-dot.high { background: var(--status-serious); }
+  .status-dot.medium { background: var(--status-warning); }
+  .status-dot.low { background: var(--status-good); }
+  .status-dot.info { background: var(--text-muted); }
+  .vt-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .vt-dot.slot-1, .vt-bar-fill.slot-1 { background: var(--series-1); }.vt-dot.slot-2, .vt-bar-fill.slot-2 { background: var(--series-2); }.vt-dot.slot-3, .vt-bar-fill.slot-3 { background: var(--series-3); }.vt-dot.slot-4, .vt-bar-fill.slot-4 { background: var(--series-4); }.vt-dot.slot-5, .vt-bar-fill.slot-5 { background: var(--series-5); }.vt-dot.slot-6, .vt-bar-fill.slot-6 { background: var(--series-6); }.vt-dot.slot-7, .vt-bar-fill.slot-7 { background: var(--series-7); }.vt-dot.slot-8, .vt-bar-fill.slot-8 { background: var(--series-8); }
+
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+  .status-badge.critical { background: rgba(208,59,59,0.14); color: var(--status-critical); }
+  .status-badge.high { background: rgba(236,131,90,0.16); color: var(--status-serious); }
+  .status-badge.medium { background: rgba(250,178,25,0.18); color: var(--status-warning-text); }
+  .status-badge.low { background: rgba(12,163,12,0.14); color: var(--status-good); }
+  .status-badge.info { background: rgba(137,135,129,0.15); color: var(--text-muted); }
+
+  .vtype-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 11px; border: 1px solid var(--border); }
+  .vtype-chip.slot-1 { color: var(--series-1); border-color: var(--series-1); }.vtype-chip.slot-2 { color: var(--series-2); border-color: var(--series-2); }.vtype-chip.slot-3 { color: var(--series-3); border-color: var(--series-3); }.vtype-chip.slot-4 { color: var(--series-4); border-color: var(--series-4); }.vtype-chip.slot-5 { color: var(--series-5); border-color: var(--series-5); }.vtype-chip.slot-6 { color: var(--series-6); border-color: var(--series-6); }.vtype-chip.slot-7 { color: var(--series-7); border-color: var(--series-7); }.vtype-chip.slot-8 { color: var(--series-8); border-color: var(--series-8); }
+
+  .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+  .chip {
+    font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .chip.slot-1.active { background: var(--series-1); color: #fff; border-color: var(--series-1); }.chip.slot-2.active { background: var(--series-2); color: #fff; border-color: var(--series-2); }.chip.slot-3.active { background: var(--series-3); color: #fff; border-color: var(--series-3); }.chip.slot-4.active { background: var(--series-4); color: #fff; border-color: var(--series-4); }.chip.slot-5.active { background: var(--series-5); color: #fff; border-color: var(--series-5); }.chip.slot-6.active { background: var(--series-6); color: #fff; border-color: var(--series-6); }.chip.slot-7.active { background: var(--series-7); color: #fff; border-color: var(--series-7); }.chip.slot-8.active { background: var(--series-8); color: #fff; border-color: var(--series-8); }
+  .chip.sev-filter { font-weight: 600; }
+  .chip.sev-filter.active { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+  .chip#clear-filters { color: var(--status-critical); border-color: var(--status-critical); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--gridline); font-size: 12.5px; vertical-align: top; }
+  th { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+  td.rank { color: var(--text-muted); font-variant-numeric: tabular-nums; width: 24px; }
+  td.ftitle { font-weight: 600; max-width: 240px; }
+  td.rationale { color: var(--text-secondary); max-width: 280px; }
+  td.stage-tag { color: var(--text-muted); white-space: nowrap; }
+  code { background: var(--page-plane); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; }
+  tbody tr:hover { background: var(--page-plane); }
+  .frow.hidden { display: none; }
+
+  .domain-list { columns: 3; column-gap: 20px; list-style: none; padding: 0; margin: 0; font-size: 12.5px; }
+  .domain-list li { padding: 3px 0; break-inside: avoid; }
+
+  .host-block { margin-bottom: 16px; }
+  .host-block h3 { font-size: 12.5px; margin: 0 0 6px; }
+
+  .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .shot-card { background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .shot-host { font-size: 11.5px; font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+  .shot-card img { width: 100%; border-radius: 6px; border: 1px solid var(--border); display: block; }
+  .shot-placeholder { height: 90px; border: 1px dashed var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 10.5px; text-align: center; padding: 6px; }
+  .shot-path { color: var(--text-muted); font-size: 10px; margin-top: 6px; word-break: break-all; }
+
+  .file-list { font-size: 12px; color: var(--text-secondary); line-height: 1.9; }
+  .file-list code { color: var(--series-1); }
+  .empty { color: var(--text-muted); font-style: italic; padding: 10px 0; }
+  .scope-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+  footer { padding: 20px 40px; color: var(--text-muted); font-size: 11px; border-top: 1px solid var(--border); text-align: center; }
+
+  details.panel { padding: 0; overflow: hidden; }
+  details.panel summary {
+    list-style: none; cursor: pointer; padding: 16px 20px; display: flex;
+    align-items: center; justify-content: space-between; user-select: none;
+  }
+  details.panel summary::-webkit-details-marker { display: none; }
+  details.panel summary h2 { margin: 0; }
+  details.panel summary .chevron { color: var(--text-muted); font-size: 11px; transition: transform 0.15s; }
+  details.panel[open] summary .chevron { transform: rotate(90deg); }
+  details.panel .panel-body { padding: 0 20px 18px; }
+  details.panel summary:hover { background: var(--page-plane); }
+  .recon-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+  .recon-toolbar button {
+    font-family: inherit; font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .email-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .email-toolbar button {
+    font-family: inherit; font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .email-toolbar button:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+  .copy-msg { font-size: 11.5px; color: var(--status-good); }
+</style>
+</head>
+<body>
+<header>
+  <h1>External Recon Report — {{ target }}</h1>
+  <div class="meta">Generated {{ generated_at }} · UNDERTOW · {{ 'In-scope assets only — out-of-scope matches are an audit record, never tested' }}</div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-page="dashboard">Dashboard</button>
+    <button class="tab-btn" data-page="vectors">Attack Vectors</button>
+    <button class="tab-btn" data-page="leaked">Leaked &amp; Sensitive Data</button>
+    <button class="tab-btn" data-page="recon">Recon Detail</button>
+  </nav>
+</header>
+
+<main>
+
+  <section id="page-dashboard" class="page active">
+    <div class="stat-grid">
+      <div class="stat-tile hero">
+        <div class="label">Findings requiring attention</div>
+        <div class="value">{{ stats.total_findings }}</div>
+      </div>
+      <div class="stat-tile"><div class="label">Subdomains discovered</div><div class="value">{{ stats.subdomains }}</div></div>
+      <div class="stat-tile"><div class="label">Alive hosts</div><div class="value">{{ stats.alive }}</div></div>
+      <div class="stat-tile"><div class="label">In-scope hosts</div><div class="value">{{ stats.inscope }}</div></div>
+      <div class="stat-tile"><div class="label">Dropped (out-of-scope)</div><div class="value">{{ stats.dropped }}</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Findings by severity</h2>
+      {% for b in sev_bars %}
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot {{ b.key }}"></span>{{ b.label }}</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill {{ b.key }}" style="width:{{ b.pct }}%"></div></div>
+        <div class="sev-bar-count">{{ b.count }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="panel">
+      <h2>Findings by attack vector type</h2>
+      {% for b in vt_bars %}
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-{{ b.slot }}"></span>{{ b.label }}</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-{{ b.slot }}" style="width:{{ b.pct }}%"></div></div>
+        <div class="vt-bar-count">{{ b.count }}</div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="panel">
+      <h2>Top 5 attack vectors — most likely to be exploitable first</h2>
+      {% if top5 %}
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th><th>Why it's ranked here</th><th>Stage</th></tr></thead>
+        <tbody>
+        {% for f in top5 %}
+        <tr class="frow" data-sev="{{ f.severity }}" data-vtype="{{ f.vtype }}">
+          <td class="rank">{{ f.rank }}</td>
+          <td><span class="status-badge {{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td><span class="vtype-chip slot-{{ f.slot }}">{{ f.vtype_label }}</span></td>
+          <td class="ftitle">{{ f.title }}</td>
+          <td><code>{{ f.asset }}</code></td>
+          <td class="rationale">{{ f.rationale }}</td>
+          <td class="stage-tag">{{ f.stage }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No findings graded this engagement.</div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section id="page-vectors" class="page">
+    <div class="panel">
+      <h2>Ranked attack vectors — most likely to be vulnerable → least likely</h2>
+      <div class="filter-row">
+        <button class="chip sev-filter" data-filter-sev="critical">Critical</button>
+        <button class="chip sev-filter" data-filter-sev="high">High</button>
+        <button class="chip sev-filter" data-filter-sev="medium">Medium</button>
+        <button class="chip sev-filter" data-filter-sev="low">Low</button>
+        <button class="chip sev-filter" data-filter-sev="info">Info</button>
+        {% for vt in vtype_order %}
+        <button class="chip slot-{{ vt.slot }}" data-filter-vtype="{{ vt.key }}">{{ vt.label }}</button>
+        {% endfor %}
+        <button class="chip" id="clear-filters">Clear filters</button>
+      </div>
+      {% if all_findings %}
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th><th>Why it's ranked here</th><th>Stage</th></tr></thead>
+        <tbody id="vectors-tbody">
+        {% for f in all_findings %}
+        <tr class="frow" data-sev="{{ f.severity }}" data-vtype="{{ f.vtype }}">
+          <td class="rank">{{ f.rank }}</td>
+          <td><span class="status-badge {{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td><span class="vtype-chip slot-{{ f.slot }}">{{ f.vtype_label }}</span></td>
+          <td class="ftitle">{{ f.title }}</td>
+          <td><code>{{ f.asset }}</code></td>
+          <td class="rationale">{{ f.rationale }}</td>
+          <td class="stage-tag">{{ f.stage }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% endif %}
+      <div class="empty" id="vectors-empty" style="display:none">No findings match the selected filters.</div>
+    </div>
+  </section>
+
+  <section id="page-leaked" class="page">
+    <div class="panel">
+      <h2>Leaked &amp; sensitive data found during this scan</h2>
+      {% if leaked_findings %}
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th><th>Detail</th><th>Stage</th></tr></thead>
+        <tbody>
+        {% for f in leaked_findings %}
+        <tr class="frow" data-sev="{{ f.severity }}" data-vtype="{{ f.vtype }}">
+          <td class="rank">{{ f.rank }}</td>
+          <td><span class="status-badge {{ f.severity }}">{{ f.severity|capitalize }}</span></td>
+          <td><span class="vtype-chip slot-{{ f.slot }}">{{ f.vtype_label }}</span></td>
+          <td class="ftitle">{{ f.title }}</td>
+          <td><code>{{ f.asset }}</code></td>
+          <td class="rationale">{{ f.rationale }}</td>
+          <td class="stage-tag">{{ f.stage }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No secrets, credentials, or publicly-listable data stores found this engagement.</div>
+      {% endif %}
+      <div class="scope-note">Candidate secrets found by jsleak that trufflehog couldn't verify as still live are included here but flagged unverified — confirm before treating as confirmed-exploitable.</div>
+    </div>
+  </section>
+
+  <section id="page-recon" class="page">
+
+    <div class="recon-toolbar">
+      <button id="expand-all">Expand all</button>
+      <button id="collapse-all">Collapse all</button>
+    </div>
+
+    <details class="panel" open>
+      <summary><h2>Scope gate</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.scope_rows %}
+        <table>
+          <thead><tr><th>Host</th><th>IP</th><th>Status</th><th>Reason</th></tr></thead>
+          <tbody>
+          {% for r in recon.scope_rows %}
+          <tr><td><code>{{ r.host }}</code></td><td>{{ r.ip }}</td>
+            <td><span class="status-badge {{ 'low' if r.status == 'In-scope' else 'info' }}">{{ r.status }}</span></td>
+            <td>{{ r.reason }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">No scope gate data available.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Subdomains discovered ({{ recon.subdomains|length }})</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.subdomains %}
+        <ul class="domain-list">{% for d in recon.subdomains %}<li><code>{{ d }}</code></li>{% endfor %}</ul>
+        {% else %}<div class="empty">No subdomains recorded.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Alive hosts (HTTP/HTTPS probe)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.alive_rows %}
+        <table>
+          <thead><tr><th>Host</th><th>Status</th><th>Title</th><th>IP</th></tr></thead>
+          <tbody>
+          {% for r in recon.alive_rows %}
+          <tr><td><code>{{ r.host }}</code></td>
+            <td><span class="status-badge {{ 'low' if r.status == '200' else 'info' }}">{{ r.status }}</span></td>
+            <td>{{ r.title }}</td><td>{{ r.ip }}</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+        {% else %}<div class="empty">No alive-host data available.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Port scan results (in-scope hosts only)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.port_hosts %}
+        {% for h in recon.port_hosts %}
+        <div class="host-block">
+          <h3>{{ h.ip }}</h3>
+          <table>
+            <thead><tr><th>Port</th><th>Proto</th><th>Service</th><th>Product</th></tr></thead>
+            <tbody>{% for p in h.ports %}<tr><td>{{ p.port }}</td><td>{{ p.protocol }}</td><td>{{ p.service }}</td><td>{{ p.product }} {{ p.version }}</td></tr>{% endfor %}</tbody>
+          </table>
+        </div>
+        {% endfor %}
+        {% else %}<div class="empty">No open ports found on in-scope hosts.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>JS analysis — discovered endpoints</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.js_endpoints %}
+        <table><thead><tr><th>Endpoint</th><th>Why it's flagged</th><th>Severity</th></tr></thead>
+        <tbody>{% for e in recon.js_endpoints %}<tr><td><code>{{ e.endpoint }}</code></td><td>{{ e.reason }}</td><td><span class="status-badge {{ e.severity }}">{{ e.severity|capitalize }}</span></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No notable endpoints flagged by jsleak's linkFinder.</div>{% endif %}
+        <div class="scope-note">Full raw jsleak output: <code>JS/jsleak.txt</code>. Secrets are shown on the Leaked &amp; Sensitive Data tab, not repeated here.</div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Vulnerability candidate checklist (manual verification required)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.vuln_candidates %}
+        <table>
+          <thead><tr><th>Class</th><th>Candidate endpoint</th><th>Full list</th></tr></thead>
+          <tbody>{% for v in recon.vuln_candidates %}<tr><td>{{ v.cls }}</td><td><code>{{ v.example }}</code></td><td><code>{{ v.file }}</code></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">Stage 5 not run this engagement.</div>{% endif %}
+        <div class="scope-note">These are pattern-matched candidates (parameter names that <em>look</em> exploitable), not confirmed vulnerabilities — this tool never auto-exploits. Verify each manually before reporting.</div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>WordPress</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.wpscan_rows %}
+        <table><thead><tr><th>Plugin / Theme</th><th>Version</th><th>What it's vulnerable to</th></tr></thead>
+        <tbody>{% for w in recon.wpscan_rows %}<tr><td>{{ w.plugin }}</td><td>{{ w.version }}</td><td>{{ w.vulnerable_to }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No WordPress installations detected this engagement.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Service / vulnerability checks</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+
+        <h3>SSL/TLS — legacy protocol support</h3>
+        {% if recon.ssl_rows %}
+        <table><thead><tr><th>IP / FQDN</th><th>TLS 1.0</th><th>TLS 1.1</th></tr></thead>
+        <tbody>{% for s in recon.ssl_rows %}<tr><td><code>{{ s.asset }}</code></td>
+          <td><span class="status-badge {{ 'medium' if s.tls10 == 'Yes' else 'low' }}">{{ s.tls10 }}</span></td>
+          <td><span class="status-badge {{ 'medium' if s.tls11 == 'Yes' else 'low' }}">{{ s.tls11 }}</span></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No HTTPS hosts checked this engagement.</div>{% endif %}
+
+        <h3 style="margin-top:20px">IKE-Scan — PSK hash exposure</h3>
+        {% if recon.ike_rows %}
+        <table><thead><tr><th>Asset</th><th>Hash found?</th><th>Detail</th></tr></thead>
+        <tbody>{% for i in recon.ike_rows %}<tr><td><code>{{ i.asset }}</code></td>
+          <td><span class="status-badge {{ 'high' if i.hash_found == 'Yes' else 'low' }}">{{ i.hash_found }}</span></td>
+          <td>{{ i.detail }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No IKE/VPN gateways responded this engagement.</div>{% endif %}
+
+        <h3 style="margin-top:20px">Subzy — subdomain takeover likelihood</h3>
+        {% if recon.subzy_rows %}
+        <table><thead><tr><th>Subdomain</th><th>Likelihood of takeover</th><th>Detail</th></tr></thead>
+        <tbody>{% for s in recon.subzy_rows %}<tr><td><code>{{ s.subdomain }}</code></td>
+          <td><span class="status-badge {{ 'critical' if s.likelihood == '100%' else ('low' if s.likelihood == '0%' else 'info') }}">{{ s.likelihood }}</span></td>
+          <td>{{ s.detail }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">Stage 9 not run this engagement.</div>{% endif %}
+
+        <h3 style="margin-top:20px">SocialHunter — broken social/asset links</h3>
+        {% if recon.social_rows %}
+        <table><thead><tr><th>Asset</th><th>Broken link</th></tr></thead>
+        <tbody>{% for s in recon.social_rows %}<tr><td><code>{{ s.asset }}</code></td><td><code>{{ s.link }}</code></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No broken social links found this engagement.</div>{% endif %}
+
+        <h3 style="margin-top:20px">Clickjack — frame-ancestors protection</h3>
+        {% if recon.clickjack_rows %}
+        <table><thead><tr><th>Asset</th><th>Vulnerable</th><th>Detail</th></tr></thead>
+        <tbody>{% for c in recon.clickjack_rows %}<tr><td><code>{{ c.asset }}</code></td>
+          <td><span class="status-badge {{ 'high' if c.vulnerable == 'Yes' else 'low' }}">{{ c.vulnerable }}</span></td>
+          <td>{{ c.detail }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">Stage 9 not run this engagement.</div>{% endif %}
+
+        <h3 style="margin-top:20px">SSH / Git exposure checks</h3>
+        {% if recon.sshgit_rows %}
+        <table><thead><tr><th>Tool</th><th>Target</th><th>Result</th><th>Raw output</th></tr></thead>
+        <tbody>{% for r in recon.sshgit_rows %}<tr><td>{{ r.tool }}</td><td><code>{{ r.target }}</code></td><td>{{ r.result }}</td><td><code>{{ r.raw_file }}</code></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">No ssh-audit/git-exposure data available.</div>{% endif %}
+
+        <h3 style="margin-top:20px">Not run this engagement (opt-in, gated)</h3>
+        {% if recon.not_run %}
+        <table><thead><tr><th>Tool</th><th>Note</th></tr></thead>
+        <tbody>{% for n in recon.not_run %}<tr><td>{{ n.tool }}</td><td>{{ n.note }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% endif %}
+
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Cloud assets</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.cloud_rows %}
+        <table><thead><tr><th>Provider</th><th>Resource</th><th>Status</th></tr></thead>
+        <tbody>{% for c in recon.cloud_rows %}<tr><td>{{ c.provider }}</td><td><code>{{ c.resource }}</code></td>
+          <td><span class="status-badge {{ 'high' if 'PUBLIC' in c.status else 'low' }}">{{ c.status }}</span></td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">Stage 8 not run, or no cloud assets found this engagement.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Screenshots</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.screenshots %}
+        <div class="shot-grid">
+        {% for s in recon.screenshots %}
+        <div class="shot-card">
+          <div class="shot-host">{{ s.host }}</div>
+          {% if s.data_uri %}<img src="{{ s.data_uri }}" alt="{{ s.host }}">{% else %}<div class="shot-placeholder">Screenshot unavailable</div>{% endif %}
+          <div class="shot-path">{{ s.path }}</div>
+        </div>
+        {% endfor %}
+        </div>
+        {% else %}<div class="empty">Stage 7 not run this engagement.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>OSINT / email gathering</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        {% if recon.emails %}
+        <div class="email-toolbar">
+          <button id="copy-emails" type="button">Copy all emails</button>
+          <span id="copy-emails-msg" class="copy-msg"></span>
+        </div>
+        <table><thead><tr><th>Email</th><th>Source</th></tr></thead>
+        <tbody>{% for e in recon.emails %}<tr><td><code class="email-cell">{{ e.email }}</code></td><td>{{ e.source }}</td></tr>{% endfor %}</tbody>
+        </table>
+        {% else %}<div class="empty">Stage 10 not run, or no emails found this engagement.</div>{% endif %}
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Per-stage raw output files (one .txt per tool that ran, absolute rule)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <div class="file-list">{{ recon.file_list_html|safe }}</div>
+        <div class="scope-note">Rule: every tool actually executed writes its own named <code>.txt</code> (or documented alternate extension) — never silently folded into another tool's file.</div>
+      </div>
+    </details>
+
+  </section>
+
+</main>
+
+<footer>Generated by UNDERTOW — authorized external pentest engagement tooling.</footer>
+
+<script>
+(function() {
+  var tabBtns = document.querySelectorAll('.tab-btn');
+  var pages = document.querySelectorAll('.page');
+  tabBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      tabBtns.forEach(function(b) { b.classList.remove('active'); });
+      pages.forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    });
+  });
+
+  var activeSev = new Set();
+  var activeVtype = new Set();
+  var rows = document.querySelectorAll('#vectors-tbody .frow');
+  var emptyMsg = document.getElementById('vectors-empty');
+
+  function applyFilters() {
+    var visible = 0;
+    rows.forEach(function(row) {
+      var sevOk = activeSev.size === 0 || activeSev.has(row.dataset.sev);
+      var vtOk = activeVtype.size === 0 || activeVtype.has(row.dataset.vtype);
+      var show = sevOk && vtOk;
+      row.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+    emptyMsg.style.display = visible === 0 ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('.chip.sev-filter').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var sev = chip.dataset.filterSev;
+      if (activeSev.has(sev)) { activeSev.delete(sev); chip.classList.remove('active'); }
+      else { activeSev.add(sev); chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+  document.querySelectorAll('.chip[data-filter-vtype]').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var vt = chip.dataset.filterVtype;
+      if (activeVtype.has(vt)) { activeVtype.delete(vt); chip.classList.remove('active'); }
+      else { activeVtype.add(vt); chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+  var clearBtn = document.getElementById('clear-filters');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', function() {
+      activeSev.clear(); activeVtype.clear();
+      document.querySelectorAll('.chip.active').forEach(function(c) { c.classList.remove('active'); });
+      applyFilters();
+    });
+  }
+
+  var expandAllBtn = document.getElementById('expand-all');
+  var collapseAllBtn = document.getElementById('collapse-all');
+  if (expandAllBtn) {
+    expandAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('#page-recon details.panel').forEach(function(d) { d.open = true; });
+    });
+  }
+  if (collapseAllBtn) {
+    collapseAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('#page-recon details.panel').forEach(function(d) { d.open = false; });
+    });
+  }
+
+  var copyEmailsBtn = document.getElementById('copy-emails');
+  if (copyEmailsBtn) {
+    copyEmailsBtn.addEventListener('click', function() {
+      var emails = Array.prototype.map.call(
+        document.querySelectorAll('#page-recon .email-cell'),
+        function(el) { return el.textContent.trim(); }
+      );
+      var text = emails.join('\n');
+      var msg = document.getElementById('copy-emails-msg');
+      function done() {
+        if (msg) {
+          msg.textContent = 'Copied ' + emails.length + ' email(s) to clipboard';
+          setTimeout(function() { msg.textContent = ''; }, 2500);
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

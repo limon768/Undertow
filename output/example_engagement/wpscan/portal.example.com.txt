@@ -1,0 +1,3 @@
+[+] WordPress version 5.8 identified (outdated, latest is 6.6)
+[+] Vulnerable plugin: contact-form-7 v5.4 - CVE-2023-XXXX reflected XSS
+[+] User enumeration via ?author=1 -> admin

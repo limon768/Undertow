@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Recon Workflow v2</title>
+<style>
+  :root {
+    --bg: #0f1419;
+    --panel: #161c24;
+    --panel2: #1b2330;
+    --border: #263140;
+    --text: #d8e1e8;
+    --muted: #8492a1;
+    --accent: #4fb3d9;
+    --ok: #4caf7d;
+    --warn: #d9a94f;
+    --danger: #d95f5f;
+    --gold: #d9b54f;
+    --purple: #a98fd9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 28px 40px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(135deg, #131a22, #0f1419);
+  }
+  header h1 { margin: 0 0 4px; font-size: 22px; color: #fff; }
+  header .meta { color: var(--muted); font-size: 12px; }
+  main {
+    padding: 32px 40px 80px;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .stage {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-bottom: 6px;
+  }
+  .stage.gate { border-left-color: var(--ok); background: #14231c; }
+  .stage.vuln { border-left-color: var(--danger); }
+  .stage.grade { border-left-color: var(--gold); background: #241f14; }
+  .stage.report { border-left-color: var(--purple); }
+  .stage h2 {
+    margin: 0 0 6px;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #fff;
+  }
+  .stage h2 .tag {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 4px;
+    margin-left: 8px;
+    text-transform: none;
+    letter-spacing: normal;
+  }
+  .tag.passive { background: rgba(79,179,217,0.15); color: var(--accent); }
+  .tag.active { background: rgba(217,169,79,0.15); color: var(--warn); }
+  .tag.optional { background: rgba(132,146,161,0.2); color: var(--muted); }
+  .tag.gated { background: rgba(217,95,95,0.15); color: var(--danger); }
+  .sub {
+    margin: 10px 0;
+    padding: 10px 14px;
+    background: var(--panel2);
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .sub .subtitle { color: var(--accent); font-weight: 600; font-size: 12px; margin-bottom: 4px; }
+  .cmd-list { margin: 0; padding-left: 0; list-style: none; }
+  .cmd-list li {
+    padding: 3px 0;
+    font-size: 12.5px;
+    color: var(--text);
+  }
+  .cmd-list li .tool { color: #fff; font-weight: 600; }
+  code {
+    background: #0f1419;
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 11.5px;
+    color: var(--ok);
+  }
+  .out {
+    color: var(--purple);
+  }
+  .dropped {
+    margin-top: 8px;
+    padding: 8px 14px;
+    border-left: 2px solid var(--danger);
+    background: rgba(217,95,95,0.06);
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .dropped .title { color: var(--danger); font-weight: 600; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+  .dropped s { color: #6b7684; }
+  .arrow {
+    text-align: center;
+    color: var(--muted);
+    font-size: 18px;
+    margin: 2px 0;
+    letter-spacing: 4px;
+  }
+  .banner {
+    text-align: center;
+    background: rgba(76,175,125,0.1);
+    border: 1px dashed var(--ok);
+    color: var(--ok);
+    border-radius: 6px;
+    padding: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    margin: 10px 0;
+    text-transform: uppercase;
+  }
+  .parallel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+    margin: 6px 0;
+  }
+  .parallel-grid .stage { margin-bottom: 0; }
+  .note {
+    font-size: 11.5px;
+    color: var(--muted);
+    font-style: italic;
+    margin-top: 6px;
+  }
+  .files-list {
+    font-size: 11.5px;
+    color: var(--muted);
+    margin-top: 8px;
+    line-height: 1.7;
+  }
+  .files-list code { color: var(--warn); }
+  footer {
+    padding: 20px 40px;
+    color: var(--muted);
+    font-size: 11px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Recon Automation — Workflow v2</h1>
+  <div class="meta">Original recon methodology. Core rule: everything past Stage 3 touches in-scope assets only.</div>
+  <div class="legend">
+    <span><i class="swatch" style="background:var(--accent)"></i> passive / data gathering</span>
+    <span><i class="swatch" style="background:var(--ok)"></i> scope gate / checkpoint</span>
+    <span><i class="swatch" style="background:var(--danger)"></i> active / vulnerability check (gated, run last)</span>
+    <span><i class="swatch" style="background:var(--gold)"></i> grading (core deliverable)</span>
+    <span><i class="swatch" style="background:var(--purple)"></i> report output</span>
+  </div>
+</header>
+
+<main>
+
+  <div class="stage">
+    <h2>Stage 0 — Setup</h2>
+    <div class="note">undertow.py --check-tools [--install]</div>
+    <div class="files-list">Creates directory tree + <code>scope.txt</code> <code>web_scope.txt</code> <code>out-of-scope.txt</code> <code>Note.txt</code> (client-provided scope files)</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage">
+    <h2>Stage 1 — Subdomain Enumeration <span class="tag passive">passive + active</span></h2>
+
+    <div class="sub">
+      <div class="subtitle">1A · Passive sources (parallel)</div>
+      <ul class="cmd-list">
+        <li><span class="tool">subscraper</span> -m all → <code class="out">subscraper.txt</code> <span class="note">(covers crt.sh, AlienVault OTX, archive.org, VirusTotal, Censys, Shodan, Chaos, CertSpotter, BufferOver, DNSDumpster, BeVigil, RedHunt Labs — 12+ sources in one tool)</span></li>
+        <li><span class="tool">amass enum -passive</span> → <code class="out">amass_passive.txt</code></li>
+        <li><span class="tool">subfinder</span> -all → <code class="out">subfinder.txt</code></li>
+        <li><span class="tool">urlscan.io</span> API query → <code class="out">urlscan_subs.txt</code></li>
+        <li><span class="tool">github-subdomains</span> <span class="tag optional">optional — needs GH token</span> → <code class="out">github_subs.txt</code></li>
+      </ul>
+      <div class="note">merge + dedupe → <code class="out">all_passive_domain.txt</code></div>
+    </div>
+
+    <div class="sub">
+      <div class="subtitle">1B · Active / brute-force</div>
+      <ul class="cmd-list">
+        <li><span class="tool">amass enum -active -norecursive</span> → <code class="out">amass_active.txt</code> <span class="note">(handles brute force + permutation + reverse sweep internally)</span></li>
+        <li><span class="tool">dnsx -ptr</span> over <code>scope.txt</code> CIDRs → <code class="out">reverse_dns.txt</code> <span class="note">(finds hostnames on client's own IP space — not covered by amass)</span></li>
+        <li><span class="tool">puredns + dnsgen</span> permutation <span class="tag optional">optional — only with --wordlist</span> → <code class="out">bruteforce_domain.txt</code></li>
+      </ul>
+      <div class="note">merge + dedupe → <code class="out">all_activeScan_domain.txt</code></div>
+    </div>
+
+    <div class="note">1A + 1B merged + deduped → <code class="out">all_domain.txt</code></div>
+
+    <div class="dropped">
+      <div class="title">Dropped from this stage (redundant or scope-expansion — opinion)</div>
+      <s>standalone crt.sh curl call</s> — already inside SubScraper's crt.sh module (was being queried 3x).<br>
+      <s>hakrevdns + prips reverse-DNS sweep</s> — same technique as dnsx -ptr, one tool is enough.<br>
+      <s>ASN/BGP discovery (Hurricane Electric, asnmap, ARIN/RIPE)</s> — scope-<em>expansion</em>, not needed when the client hands you scope.txt directly.<br>
+      <s>Reverse WHOIS (whoxy), SSL-SNI cloud-IP scraping (kaeferjaeger)</s> — same reason: finds assets outside the given scope.<br>
+      <s>Crunchbase / OCCRP acquisition hunting</s> — bug-bounty scope discovery, contradicts "out-of-scope is absolute no."<br>
+      <s>Google dorking</s> — kept as a manual technique note only, not reliably automatable (CAPTCHA/blocking risk).
+    </div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage">
+    <h2>Stage 2 — Alive Host + IP Discovery <span class="tag passive">passive probe</span></h2>
+    <div class="note"><code>httpx -l all_domain.txt -p &lt;expanded port list&gt; -title -sc -ip</code> → <code class="out">alive_domain.txt</code></div>
+    <div class="note">grep -i "login|admin" on titles → <code class="out">login_endpoints.txt</code> (metadata, not a separate stage)</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage gate">
+    <h2>Stage 3 — Scope Gate <span class="tag">hard checkpoint</span></h2>
+    <ul class="cmd-list">
+      <li><span class="tool">3A</span> extract host + IP pairs from <code>alive_domain.txt</code></li>
+      <li><span class="tool">3B</span> IP match: <code>grepcidr -f scope.txt</code></li>
+      <li><span class="tool">3C</span> FQDN match: suffix check against <code>web_scope.txt</code> <span class="note">(catches CDN/cloud-fronted in-scope hosts whose IP isn't the client's own)</span></li>
+      <li><span class="tool">3D</span> exclusion check: drop anything matching <code>out-of-scope.txt</code>, regardless of 3B/3C — explicit exclusion always wins</li>
+      <li><span class="tool">3E</span> in-scope = (3B OR 3C) AND NOT 3D</li>
+    </ul>
+    <div class="files-list">
+      → <code>INSCOPE_domain.txt</code> · <code>INSCOPE_subdomain_ip.txt</code> · <code>OUT_OF_SCOPE_domain.txt</code> (audit record only — <strong>never read again downstream</strong>)
+    </div>
+  </div>
+
+  <div class="banner">🔒 locked — everything below reads only from INSCOPE_domain.txt / INSCOPE_subdomain_ip.txt</div>
+
+  <div class="parallel-grid">
+    <div class="stage">
+      <h2>Stage 4 — Port Scan</h2>
+      <ul class="cmd-list">
+        <li><span class="tool">naabu</span> (fast) → <code class="out">naabu.txt</code></li>
+        <li><span class="tool">nmap -sV -p&lt;ports&gt;</span> -iL INSCOPE_subdomain_ip.txt → <code class="out">nmap.txt</code></li>
+        <li><span class="tool">smap</span> (Shodan-backed, zero-packet nmap-compatible output) -iL INSCOPE_subdomain_ip.txt → <code class="out">smap.txt</code></li>
+        <li><span class="tool">shodan host / InternetDB</span> lookup per in-scope IP → <code class="out">shodan.txt</code> <span class="note">(passive — surfaces ports/CVEs Shodan already indexed, no packets sent to client)</span></li>
+      </ul>
+      <div class="dropped">
+        <div class="title">Dropped</div>
+        <s>nmap -p- full 65535-port pass</s> — too slow/noisy for the gain; targeted port list + naabu + smap/Shodan already covers what matters.
+      </div>
+    </div>
+    <div class="stage">
+      <h2>Stage 5 — Web / URL / Param Discovery</h2>
+      <ul class="cmd-list">
+        <li><span class="tool">katana</span> (active crawl, sole default) → <code class="out">Loot/katana.txt</code></li>
+        <li><span class="tool">gau</span> (Wayback + CommonCrawl + OTX + urlscan, sole default) → <code class="out">Loot/gau.txt</code></li>
+        <li>merge + dedupe → <code class="out">urls.txt</code></li>
+        <li><span class="tool">arjun</span> (params, sole default) → <code class="out">Loot/arjun.txt</code> → <code class="out">params.txt</code></li>
+        <li><span class="tool">ffuf</span> (content discovery, sole default) → <code class="out">dirbrute/ffuf_&lt;host&gt;.txt</code></li>
+        <li><span class="tool">cariddi</span> → <code class="out">Loot/cariddi.txt</code></li>
+        <li>WAF + 403 detection on httpx output → <code class="out">nowaf_subs.txt</code>, <code class="out">403_subs.txt</code></li>
+      </ul>
+      <div class="sub">
+        <div class="subtitle">5.1 · Vulnerability candidate triage (gf patterns) — manual-test checklist, not confirmed findings</div>
+        <ul class="cmd-list">
+          <li><span class="tool">gf sqli/xss/lfi/ssrf/redirect/idor/rce/ssti</span> against urls.txt + params.txt → one file per class in <code class="out">Loot/vuln_candidates/</code></li>
+        </ul>
+        <div class="note">Output feeds your manual verification, same as the removed credential-spray step — this tool flags candidates, it does not exploit them.</div>
+      </div>
+      <div class="dropped">
+        <div class="title">Dropped (redundant with the tool kept)</div>
+        <s>waybackurls, waymore</s> — both subsets of/slower than gau; waymore kept as an opt-in <code>--deep-archive</code> flag only.<br>
+        <s>gospider, hakrawler</s> — katana already crawls + renders JS by default.<br>
+        <s>gobuster, dirsearch</s> — ffuf kept as the one content-discovery tool.<br>
+        <s>standalone LinkFinder</s> — jsleak -l (Stage 6) already does this.
+      </div>
+    </div>
+    <div class="stage">
+      <h2>Stage 6 — JS Analysis <span class="tag">dedicated · JSRecon methodology</span></h2>
+      <ul class="cmd-list">
+        <li><span class="tool">katana -d 5 -jc | grep .js$</span> → <code class="out">JS/js_active.txt</code></li>
+        <li><span class="tool">gau | grep .js$</span> (passive/archived JS) → <code class="out">JS/js_passive.txt</code></li>
+        <li>merge + dedupe → <code class="out">JS/all_js.txt</code></li>
+        <li><span class="tool">httpx -mc 200</span> → <code class="out">JS/js_live.txt</code> <span class="note">(drop dead links before scanning)</span></li>
+        <li><span class="tool">jsleak -s -l -k</span> → <code class="out">JS/jsleak.txt</code> <span class="note">(secretFinder + linkFinder + status-code check, one tool)</span></li>
+        <li><span class="tool">trufflehog</span> filesystem scan on downloaded JS <span class="note">(kept — verifies whether a leaked key is actually still live, jsleak doesn't do this)</span></li>
+        <li><span class="tool">nuclei</span> credential-disclosure templates <span class="tag gated">opt-in, same gate as Stage 9</span></li>
+      </ul>
+      <div class="dropped">
+        <div class="title">Dropped</div>
+        <s>standalone SecretFinder, LinkFinder, gf aws-keys/github/redirect</s> — all covered by jsleak now.<br>
+        <s>semgrep</s> — SAST tool for source review, not suited to black-box minified bundles.<br>
+        <s>LazyEgg browser extension</s> — manual/GUI only, not automatable in this pipeline.
+      </div>
+    </div>
+    <div class="stage">
+      <h2>Stage 7 — Screenshots</h2>
+      <ul class="cmd-list">
+        <li><span class="tool">eyewitness --web</span> -f INSCOPE_domain.txt → <code class="out">subdomain/eyewitness/</code></li>
+        <li><span class="tool">eyewitness</span> on nmap http(s) services → <code class="out">nmap/eyewitness/</code></li>
+      </ul>
+    </div>
+    <div class="stage">
+      <h2>Stage 8 — Cloud Assets</h2>
+      <ul class="cmd-list">
+        <li><span class="tool">cloud_enum -k "&lt;client name&gt;"</span> → <code class="out">MISC/cloud_assets.txt</code></li>
+        <li><span class="tool">aws s3 ls --no-sign-request</span> on discovered buckets</li>
+        <li><span class="tool">Shodan Karma</span> -d &lt;in-scope domain&gt;</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="arrow">▼</div>
+
+  <div class="stage vuln">
+    <h2>Stage 9 — Service / Vulnerability Checks <span class="tag gated">moved to end, in-scope only</span></h2>
+    <ul class="cmd-list">
+      <li><span class="tool">wpscan</span> (if WordPress detected) → <code class="out">wpscan/</code></li>
+      <li><span class="tool">SSL/TLS</span>: nmap ssl-enum-ciphers, sslscan, testssl.sh</li>
+      <li><span class="tool">ssh-audit</span></li>
+      <li><span class="tool">ike-scan</span> (VPN gateways from Stage 4)</li>
+      <li><span class="tool">subzy</span> (subdomain takeover check)</li>
+      <li><span class="tool">socialhunter</span> (broken social links)</li>
+      <li><span class="tool">clickjack PoC generation</span>, git exposure check (/.git/)</li>
+      <li><span class="tool">nuclei</span> <span class="tag gated">opt-in --vuln-scan</span> (CVE + DNS templates, severity-filtered)</li>
+      <li><span class="tool">nikto</span> <span class="tag gated">opt-in</span></li>
+    </ul>
+    <div class="note">Everything here is intrusive/active — same caution tier as the credential-spray stage we removed. Runs last, in-scope only, opt-in flags gate the noisiest tools.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage">
+    <h2>Stage 10 — OSINT / Email Gathering</h2>
+    <ul class="cmd-list">
+      <li><span class="tool">metagoofil, crosslinked, bridgekeeper</span></li>
+    </ul>
+    <div class="note">merge + dedupe → <code class="out">All_Emails.txt</code> — feeds your manual password-spray process (outside this tool)</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage grade">
+    <h2>Stage 11 — Grading / Attack Vector Scoring <span class="tag" style="background:rgba(217,181,79,0.2);color:var(--gold)">core deliverable</span></h2>
+    <div class="note">Takes every finding from Stages 4–10 (open ports, WPScan CVEs, JS secrets, exposed .git, weak TLS ciphers, subdomain takeovers, IKE aggressive mode, public cloud buckets, admin panels, missing WAF, etc.) and assigns a severity grade (Critical/High/Medium/Low/Info) + one-line rationale per finding.</div>
+    <div class="note">Sort order is explicit: <strong>most likely to be vulnerable → least likely</strong>, top of the list first. This ranking, not raw counts, is what the report leads with.</div>
+  </div>
+  <div class="arrow">▼</div>
+
+  <div class="stage report">
+    <h2>Stage 12 — Report Generation <span class="tag" style="background:rgba(169,143,217,0.2);color:var(--purple)">multi-page, interactive</span></h2>
+    <ul class="cmd-list">
+      <li>Landing page: stats/summary dashboard (assets found, live hosts, in-scope %, findings by severity, top 10 attack vectors)</li>
+      <li>Attack Vector page: full ranked list, most-likely-vulnerable → least-likely, client-side filter by vuln type (SQLi, XSS, takeover, exposed secret, misconfig, etc.)</li>
+      <li>Leaked/Sensitive Data page: dedicated view of every secret/credential/leak found (JS secrets, exposed .git, cloud buckets, breach data) — surfaced prominently, not buried in raw tool output</li>
+      <li>Per-stage detail pages: subdomains, ports, web, JS, screenshots, OSINT (the sections already built, kept as supporting evidence)</li>
+    </ul>
+    <div class="note">Self-contained HTML + inline JS for filtering (no server, no external CDN — must open standalone for client delivery). Aggregates Stage 11's ranking as the primary view.</div>
+  </div>
+
+</main>
+
+<footer>
+  UNDERTOW workflow plan — internal use only, not for distribution.
+</footer>
+</body>
+</html>

@@ -1,0 +1,972 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>External Recon Report — example.com</title>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --border:         rgba(11,11,11,0.10);
+    --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+    --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7; --series-8: #e34948;
+    --status-good: #0ca30c; --status-warning: #fab219; --status-serious: #ec835a; --status-critical: #d03b3b;
+    --status-warning-text: #8a5c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --border:         rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+      --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+      --status-warning-text: var(--status-warning);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --border:         rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9; --series-8: #e66767;
+    --status-warning-text: var(--status-warning);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--page-plane);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  header {
+    padding: 24px 40px;
+    background: var(--surface-1);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  header h1 { margin: 0 0 2px; font-size: 20px; }
+  header .meta { color: var(--text-muted); font-size: 12px; }
+  nav.tabs { display: flex; gap: 4px; margin-top: 16px; border-bottom: 1px solid var(--gridline); flex-wrap: wrap; }
+  nav.tabs button {
+    background: none; border: none; padding: 10px 16px; font-size: 13px;
+    color: var(--text-secondary); cursor: pointer; border-bottom: 2px solid transparent;
+    font-family: inherit;
+  }
+  nav.tabs button.active { color: var(--text-primary); border-bottom-color: var(--series-1); font-weight: 600; }
+  nav.tabs button:hover { color: var(--text-primary); }
+  main { max-width: 1200px; margin: 0 auto; padding: 28px 40px 80px; }
+  .page { display: none; }
+  .page.active { display: block; }
+
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .stat-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; }
+  .stat-tile .label { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .stat-tile .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+  .stat-tile.hero { grid-column: span 2; }
+  .stat-tile.hero .value { font-size: 40px; color: var(--status-critical); }
+
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; margin-bottom: 20px; }
+  .panel h2 { margin: 0 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-secondary); }
+  .panel h3 { font-size: 12px; color: var(--text-primary); margin: 0 0 8px; }
+
+  .sev-bar-row, .vt-bar-row { display: grid; grid-template-columns: 190px 1fr 32px; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .sev-bar-label, .vt-bar-label { font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  .sev-bar-track, .vt-bar-track { height: 20px; background: var(--gridline); border-radius: 4px; overflow: hidden; }
+  .sev-bar-fill, .vt-bar-fill { height: 100%; border-radius: 4px; }
+  .sev-bar-count, .vt-bar-count { font-size: 12px; color: var(--text-secondary); text-align: right; font-variant-numeric: tabular-nums; }
+  .sev-bar-fill.critical { background: var(--status-critical); }
+  .sev-bar-fill.high { background: var(--status-serious); }
+  .sev-bar-fill.medium { background: var(--status-warning); }
+  .sev-bar-fill.low { background: var(--status-good); }
+  .sev-bar-fill.info { background: var(--text-muted); }
+  .status-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .status-dot.critical { background: var(--status-critical); }
+  .status-dot.high { background: var(--status-serious); }
+  .status-dot.medium { background: var(--status-warning); }
+  .status-dot.low { background: var(--status-good); }
+  .status-dot.info { background: var(--text-muted); }
+  .vt-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .vt-dot.slot-1, .vt-bar-fill.slot-1 { background: var(--series-1); }.vt-dot.slot-2, .vt-bar-fill.slot-2 { background: var(--series-2); }.vt-dot.slot-3, .vt-bar-fill.slot-3 { background: var(--series-3); }.vt-dot.slot-4, .vt-bar-fill.slot-4 { background: var(--series-4); }.vt-dot.slot-5, .vt-bar-fill.slot-5 { background: var(--series-5); }.vt-dot.slot-6, .vt-bar-fill.slot-6 { background: var(--series-6); }.vt-dot.slot-7, .vt-bar-fill.slot-7 { background: var(--series-7); }.vt-dot.slot-8, .vt-bar-fill.slot-8 { background: var(--series-8); }
+
+  .status-badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.02em; }
+  .status-badge.critical { background: rgba(208,59,59,0.14); color: var(--status-critical); }
+  .status-badge.high { background: rgba(236,131,90,0.16); color: var(--status-serious); }
+  .status-badge.medium { background: rgba(250,178,25,0.18); color: var(--status-warning-text); }
+  .status-badge.low { background: rgba(12,163,12,0.14); color: var(--status-good); }
+  .status-badge.info { background: rgba(137,135,129,0.15); color: var(--text-muted); }
+
+  .vtype-chip { display: inline-block; padding: 3px 9px; border-radius: 4px; font-size: 11px; border: 1px solid var(--border); }
+  .vtype-chip.slot-1 { color: var(--series-1); border-color: var(--series-1); }.vtype-chip.slot-2 { color: var(--series-2); border-color: var(--series-2); }.vtype-chip.slot-3 { color: var(--series-3); border-color: var(--series-3); }.vtype-chip.slot-4 { color: var(--series-4); border-color: var(--series-4); }.vtype-chip.slot-5 { color: var(--series-5); border-color: var(--series-5); }.vtype-chip.slot-6 { color: var(--series-6); border-color: var(--series-6); }.vtype-chip.slot-7 { color: var(--series-7); border-color: var(--series-7); }.vtype-chip.slot-8 { color: var(--series-8); border-color: var(--series-8); }
+
+  .filter-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+  .chip {
+    font-family: inherit; font-size: 12px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .chip.slot-1.active { background: var(--series-1); color: #fff; border-color: var(--series-1); }.chip.slot-2.active { background: var(--series-2); color: #fff; border-color: var(--series-2); }.chip.slot-3.active { background: var(--series-3); color: #fff; border-color: var(--series-3); }.chip.slot-4.active { background: var(--series-4); color: #fff; border-color: var(--series-4); }.chip.slot-5.active { background: var(--series-5); color: #fff; border-color: var(--series-5); }.chip.slot-6.active { background: var(--series-6); color: #fff; border-color: var(--series-6); }.chip.slot-7.active { background: var(--series-7); color: #fff; border-color: var(--series-7); }.chip.slot-8.active { background: var(--series-8); color: #fff; border-color: var(--series-8); }
+  .chip.sev-filter { font-weight: 600; }
+  .chip.sev-filter.active { background: var(--text-primary); color: var(--surface-1); border-color: var(--text-primary); }
+  .chip#clear-filters { color: var(--status-critical); border-color: var(--status-critical); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--gridline); font-size: 12.5px; vertical-align: top; }
+  th { color: var(--text-muted); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.03em; font-weight: 600; }
+  td.rank { color: var(--text-muted); font-variant-numeric: tabular-nums; width: 24px; }
+  td.ftitle { font-weight: 600; max-width: 240px; }
+  td.rationale { color: var(--text-secondary); max-width: 280px; }
+  td.stage-tag { color: var(--text-muted); white-space: nowrap; }
+  code { background: var(--page-plane); padding: 1px 6px; border-radius: 4px; font-size: 11.5px; }
+  tbody tr:hover { background: var(--page-plane); }
+  .frow.hidden { display: none; }
+
+  .domain-list { columns: 3; column-gap: 20px; list-style: none; padding: 0; margin: 0; font-size: 12.5px; }
+  .domain-list li { padding: 3px 0; break-inside: avoid; }
+
+  .host-block { margin-bottom: 16px; }
+  .host-block h3 { font-size: 12.5px; margin: 0 0 6px; }
+
+  .shot-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .shot-card { background: var(--page-plane); border: 1px solid var(--border); border-radius: 8px; padding: 10px; }
+  .shot-host { font-size: 11.5px; font-weight: 600; margin-bottom: 6px; word-break: break-all; }
+  .shot-placeholder { height: 90px; border: 1px dashed var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 10.5px; text-align: center; padding: 6px; }
+  .shot-path { color: var(--text-muted); font-size: 10px; margin-top: 6px; word-break: break-all; }
+
+  .file-list { font-size: 12px; color: var(--text-secondary); line-height: 1.9; }
+  .file-list code { color: var(--series-1); }
+  .empty { color: var(--text-muted); font-style: italic; padding: 10px 0; }
+  .scope-note { font-size: 12px; color: var(--text-muted); margin-top: 10px; }
+  footer { padding: 20px 40px; color: var(--text-muted); font-size: 11px; border-top: 1px solid var(--border); text-align: center; }
+
+  details.panel { padding: 0; overflow: hidden; }
+  details.panel summary {
+    list-style: none; cursor: pointer; padding: 16px 20px; display: flex;
+    align-items: center; justify-content: space-between; user-select: none;
+  }
+  details.panel summary::-webkit-details-marker { display: none; }
+  details.panel summary h2 { margin: 0; }
+  details.panel summary .chevron { color: var(--text-muted); font-size: 11px; transition: transform 0.15s; }
+  details.panel[open] summary .chevron { transform: rotate(90deg); }
+  details.panel .panel-body { padding: 0 20px 18px; }
+  details.panel summary:hover { background: var(--page-plane); }
+  .recon-toolbar { display: flex; justify-content: flex-end; gap: 8px; margin-bottom: 12px; }
+  .recon-toolbar button {
+    font-family: inherit; font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .email-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .email-toolbar button {
+    font-family: inherit; font-size: 11.5px; padding: 5px 10px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-secondary); cursor: pointer;
+  }
+  .email-toolbar button:hover { color: var(--text-primary); border-color: var(--text-secondary); }
+  .copy-msg { font-size: 11.5px; color: var(--status-good); }
+</style>
+</head>
+<body>
+<header>
+  <h1>External Recon Report — example.com</h1>
+  <div class="meta">Generated 2026-09-29 18:26 · Mock example data (RFC 5737 addresses, fake secrets) for tool design review only</div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-page="dashboard">Dashboard</button>
+    <button class="tab-btn" data-page="vectors">Attack Vectors</button>
+    <button class="tab-btn" data-page="leaked">Leaked &amp; Sensitive Data</button>
+    <button class="tab-btn" data-page="recon">Recon Detail</button>
+  </nav>
+</header>
+
+<main>
+
+  <section id="page-dashboard" class="page active">
+    <div class="stat-grid">
+      <div class="stat-tile hero">
+        <div class="label">Findings requiring attention</div>
+        <div class="value">14</div>
+      </div>
+      <div class="stat-tile"><div class="label">Subdomains discovered</div><div class="value">12</div></div>
+      <div class="stat-tile"><div class="label">Alive hosts</div><div class="value">7</div></div>
+      <div class="stat-tile"><div class="label">In-scope hosts</div><div class="value">5</div></div>
+      <div class="stat-tile"><div class="label">Dropped (out-of-scope)</div><div class="value">2</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Findings by severity</h2>
+      
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot critical"></span>Critical</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill critical" style="width:14%"></div></div>
+        <div class="sev-bar-count">2</div>
+      </div>
+
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot high"></span>High</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill high" style="width:29%"></div></div>
+        <div class="sev-bar-count">4</div>
+      </div>
+
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot medium"></span>Medium</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill medium" style="width:29%"></div></div>
+        <div class="sev-bar-count">4</div>
+      </div>
+
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot low"></span>Low</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill low" style="width:14%"></div></div>
+        <div class="sev-bar-count">2</div>
+      </div>
+
+      <div class="sev-bar-row">
+        <div class="sev-bar-label"><span class="status-dot info"></span>Info</div>
+        <div class="sev-bar-track"><div class="sev-bar-fill info" style="width:14%"></div></div>
+        <div class="sev-bar-count">2</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Findings by attack vector type</h2>
+      
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-1"></span>Exposed Secret / Leak</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-1" style="width:67%"></div></div>
+        <div class="vt-bar-count">2</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-2"></span>Misconfiguration</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-2" style="width:100%"></div></div>
+        <div class="vt-bar-count">3</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-3"></span>Subdomain Takeover</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-3" style="width:33%"></div></div>
+        <div class="vt-bar-count">1</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-4"></span>Outdated Software / CVE</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-4" style="width:33%"></div></div>
+        <div class="vt-bar-count">1</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-5"></span>SSL/TLS Weakness</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-5" style="width:33%"></div></div>
+        <div class="vt-bar-count">1</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-6"></span>Access Control / Open Panel</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-6" style="width:100%"></div></div>
+        <div class="vt-bar-count">3</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-7"></span>Injection (SQLi/XSS)</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-7" style="width:33%"></div></div>
+        <div class="vt-bar-count">1</div>
+      </div>
+
+      <div class="vt-bar-row">
+        <div class="vt-bar-label"><span class="vt-dot slot-8"></span>Network / Other Exposure</div>
+        <div class="vt-bar-track"><div class="vt-bar-fill slot-8" style="width:67%"></div></div>
+        <div class="vt-bar-count">2</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Top 5 attack vectors — most likely to be exploitable first</h2>
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th></tr></thead>
+        <tbody>
+        
+      <tr class="frow" data-sev="critical" data-vtype="secret">
+        <td class="rank">1</td>
+        <td><span class="status-badge critical">Critical</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Live AWS access key committed in production JS bundle</td>
+        <td><code>www.example.com/static/app.min.js</code></td>
+        <td class="rationale">Key validated as still active — direct cloud account compromise path.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+      <tr class="frow" data-sev="critical" data-vtype="takeover">
+        <td class="rank">2</td>
+        <td><span class="status-badge critical">Critical</span></td>
+        <td><span class="vtype-chip slot-3">Subdomain Takeover</span></td>
+        <td class="ftitle">Dangling CNAME pointing to unclaimed SaaS provider</td>
+        <td><code>dev.example.com -&gt; old-saas-provider.io</code></td>
+        <td class="rationale">subzy confirms provider-side resource unclaimed — full subdomain takeover possible.</td>
+        <td class="stage-tag">Service Checks</td>
+      </tr>
+      <tr class="frow" data-sev="high" data-vtype="access">
+        <td class="rank">3</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-6">Access Control / Open Panel</span></td>
+        <td class="ftitle">IKE aggressive mode enabled, PSK hash retrievable</td>
+        <td><code>203.0.113.10:500/udp</code></td>
+        <td class="rationale">Aggressive mode leaks a crackable PSK hash to any unauthenticated peer.</td>
+        <td class="stage-tag">Service Checks</td>
+      </tr>
+      <tr class="frow" data-sev="high" data-vtype="outdated">
+        <td class="rank">4</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-4">Outdated Software / CVE</span></td>
+        <td class="ftitle">WordPress core 5.8 — 3 major versions behind</td>
+        <td><code>portal.example.com</code></td>
+        <td class="rationale">Latest is 6.6; multiple public CVEs apply to unpatched 5.8 core.</td>
+        <td class="stage-tag">WPScan</td>
+      </tr>
+      <tr class="frow" data-sev="high" data-vtype="secret">
+        <td class="rank">5</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Hardcoded live API token in portal config.js</td>
+        <td><code>portal.example.com/assets/config.js</code></td>
+        <td class="rationale">Token grants API access; found via jsleak -s, unverified live status.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="page-vectors" class="page">
+    <div class="panel">
+      <h2>Ranked attack vectors — most likely to be vulnerable → least likely</h2>
+      <div class="filter-row">
+        <button class="chip sev-filter" data-filter-sev="critical">Critical</button>
+        <button class="chip sev-filter" data-filter-sev="high">High</button>
+        <button class="chip sev-filter" data-filter-sev="medium">Medium</button>
+        <button class="chip sev-filter" data-filter-sev="low">Low</button>
+        <button class="chip sev-filter" data-filter-sev="info">Info</button>
+        <button class="chip slot-1" data-filter-vtype="secret">Exposed Secret / Leak</button>
+<button class="chip slot-2" data-filter-vtype="misconfig">Misconfiguration</button>
+<button class="chip slot-3" data-filter-vtype="takeover">Subdomain Takeover</button>
+<button class="chip slot-4" data-filter-vtype="outdated">Outdated Software / CVE</button>
+<button class="chip slot-5" data-filter-vtype="tls">SSL/TLS Weakness</button>
+<button class="chip slot-6" data-filter-vtype="access">Access Control / Open Panel</button>
+<button class="chip slot-7" data-filter-vtype="injection">Injection (SQLi/XSS)</button>
+<button class="chip slot-8" data-filter-vtype="network">Network / Other Exposure</button>
+        <button class="chip" id="clear-filters">Clear filters</button>
+      </div>
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th><th>Why it's ranked here</th><th>Stage</th></tr></thead>
+        <tbody id="vectors-tbody">
+        
+      <tr class="frow" data-sev="critical" data-vtype="secret">
+        <td class="rank">1</td>
+        <td><span class="status-badge critical">Critical</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Live AWS access key committed in production JS bundle</td>
+        <td><code>www.example.com/static/app.min.js</code></td>
+        <td class="rationale">Key validated as still active — direct cloud account compromise path.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+
+      <tr class="frow" data-sev="critical" data-vtype="takeover">
+        <td class="rank">2</td>
+        <td><span class="status-badge critical">Critical</span></td>
+        <td><span class="vtype-chip slot-3">Subdomain Takeover</span></td>
+        <td class="ftitle">Dangling CNAME pointing to unclaimed SaaS provider</td>
+        <td><code>dev.example.com -&gt; old-saas-provider.io</code></td>
+        <td class="rationale">subzy confirms provider-side resource unclaimed — full subdomain takeover possible.</td>
+        <td class="stage-tag">Service Checks</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="access">
+        <td class="rank">3</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-6">Access Control / Open Panel</span></td>
+        <td class="ftitle">IKE aggressive mode enabled, PSK hash retrievable</td>
+        <td><code>203.0.113.10:500/udp</code></td>
+        <td class="rationale">Aggressive mode leaks a crackable PSK hash to any unauthenticated peer.</td>
+        <td class="stage-tag">Service Checks</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="outdated">
+        <td class="rank">4</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-4">Outdated Software / CVE</span></td>
+        <td class="ftitle">WordPress core 5.8 — 3 major versions behind</td>
+        <td><code>portal.example.com</code></td>
+        <td class="rationale">Latest is 6.6; multiple public CVEs apply to unpatched 5.8 core.</td>
+        <td class="stage-tag">WPScan</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="secret">
+        <td class="rank">5</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Hardcoded live API token in portal config.js</td>
+        <td><code>portal.example.com/assets/config.js</code></td>
+        <td class="rationale">Token grants API access; found via jsleak -s, unverified live status.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="misconfig">
+        <td class="rank">6</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-2">Misconfiguration</span></td>
+        <td class="ftitle">Public S3 bucket with directory listing enabled</td>
+        <td><code>example-corp-backups.s3.amazonaws.com</code></td>
+        <td class="rationale">Bucket contents fully enumerable without credentials.</td>
+        <td class="stage-tag">Cloud Assets</td>
+      </tr>
+
+      <tr class="frow" data-sev="medium" data-vtype="injection">
+        <td class="rank">7</td>
+        <td><span class="status-badge medium">Medium</span></td>
+        <td><span class="vtype-chip slot-7">Injection (SQLi/XSS)</span></td>
+        <td class="ftitle">Reflected XSS in Contact Form 7 plugin (CVE-2023-XXXX)</td>
+        <td><code>portal.example.com/wp-content/plugins/contact-form-7</code></td>
+        <td class="rationale">Outdated plugin version confirmed vulnerable; requires user interaction.</td>
+        <td class="stage-tag">WPScan</td>
+      </tr>
+
+      <tr class="frow" data-sev="medium" data-vtype="misconfig">
+        <td class="rank">8</td>
+        <td><span class="status-badge medium">Medium</span></td>
+        <td><span class="vtype-chip slot-2">Misconfiguration</span></td>
+        <td class="ftitle">Directory listing enabled on upload path</td>
+        <td><code>portal.example.com/wp-content/uploads/</code></td>
+        <td class="rationale">cariddi flagged an open 'Index of /' response.</td>
+        <td class="stage-tag">Web Crawl</td>
+      </tr>
+
+      <tr class="frow" data-sev="medium" data-vtype="access">
+        <td class="rank">9</td>
+        <td><span class="status-badge medium">Medium</span></td>
+        <td><span class="vtype-chip slot-6">Access Control / Open Panel</span></td>
+        <td class="ftitle">Backup archive and .env file exposed via brute-forced paths</td>
+        <td><code>dev.example.com/{.env.bak,backup.zip}</code></td>
+        <td class="rationale">Directory brute force found unlinked, publicly-fetchable files.</td>
+        <td class="stage-tag">Web Crawl</td>
+      </tr>
+
+      <tr class="frow" data-sev="medium" data-vtype="access">
+        <td class="rank">10</td>
+        <td><span class="status-badge medium">Medium</span></td>
+        <td><span class="vtype-chip slot-6">Access Control / Open Panel</span></td>
+        <td class="ftitle">Username enumeration via WordPress author archive</td>
+        <td><code>portal.example.com/?author=1</code></td>
+        <td class="rationale">Confirms 'admin' as a valid username, aids password-spray targeting.</td>
+        <td class="stage-tag">WPScan</td>
+      </tr>
+
+      <tr class="frow" data-sev="low" data-vtype="tls">
+        <td class="rank">11</td>
+        <td><span class="status-badge low">Low</span></td>
+        <td><span class="vtype-chip slot-5">SSL/TLS Weakness</span></td>
+        <td class="ftitle">RDP exposed on public interface (auth required, not yet weak)</td>
+        <td><code>203.0.113.11:3389</code></td>
+        <td class="rationale">No CVE confirmed; flagged for exposure minimization discussion with client.</td>
+        <td class="stage-tag">Port Scan</td>
+      </tr>
+
+      <tr class="frow" data-sev="low" data-vtype="network">
+        <td class="rank">12</td>
+        <td><span class="status-badge low">Low</span></td>
+        <td><span class="vtype-chip slot-8">Network / Other Exposure</span></td>
+        <td class="ftitle">Shodan-indexed possible BlueKeep exposure, unconfirmed</td>
+        <td><code>203.0.113.11</code></td>
+        <td class="rationale">Shodan tag only — needs manual verification before treating as confirmed.</td>
+        <td class="stage-tag">Port Scan</td>
+      </tr>
+
+      <tr class="frow" data-sev="info" data-vtype="network">
+        <td class="rank">13</td>
+        <td><span class="status-badge info">Info</span></td>
+        <td><span class="vtype-chip slot-8">Network / Other Exposure</span></td>
+        <td class="ftitle">VPN endpoint returns 403 without auth prompt</td>
+        <td><code>vpn.example.com</code></td>
+        <td class="rationale">Informational — confirms a Fortinet-style portal is present.</td>
+        <td class="stage-tag">Alive Host Discovery</td>
+      </tr>
+
+      <tr class="frow" data-sev="info" data-vtype="misconfig">
+        <td class="rank">14</td>
+        <td><span class="status-badge info">Info</span></td>
+        <td><span class="vtype-chip slot-2">Misconfiguration</span></td>
+        <td class="ftitle">Legacy JS file still served from archive path</td>
+        <td><code>www.example.com/static/legacy/auth-2023.js</code></td>
+        <td class="rationale">Old bundle still reachable; low risk but worth cleanup.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+        </tbody>
+      </table>
+      <div class="empty" id="vectors-empty" style="display:none">No findings match the selected filters.</div>
+    </div>
+  </section>
+
+  <section id="page-leaked" class="page">
+    <div class="panel">
+      <h2>Leaked &amp; sensitive data found during this scan</h2>
+      <table>
+        <thead><tr><th></th><th>Severity</th><th>Type</th><th>Finding</th><th>Asset</th><th>Detail</th><th>Stage</th></tr></thead>
+        <tbody>
+        
+      <tr class="frow" data-sev="critical" data-vtype="secret">
+        <td class="rank">1</td>
+        <td><span class="status-badge critical">Critical</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Live AWS access key committed in production JS bundle</td>
+        <td><code>www.example.com/static/app.min.js</code></td>
+        <td class="rationale">Key validated as still active — direct cloud account compromise path.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="secret">
+        <td class="rank">2</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Hardcoded live API token in portal config.js</td>
+        <td><code>portal.example.com/assets/config.js</code></td>
+        <td class="rationale">Token grants API access; found via jsleak -s, unverified live status.</td>
+        <td class="stage-tag">JS Analysis</td>
+      </tr>
+
+      <tr class="frow" data-sev="high" data-vtype="secret">
+        <td class="rank">3</td>
+        <td><span class="status-badge high">High</span></td>
+        <td><span class="vtype-chip slot-1">Exposed Secret / Leak</span></td>
+        <td class="ftitle">Cloud storage bucket contents fully listable</td>
+        <td><code>example-corp-backups.s3.amazonaws.com</code></td>
+        <td class="rationale">No credentials required to enumerate stored objects.</td>
+        <td class="stage-tag">Cloud Assets</td>
+      </tr>
+        </tbody>
+      </table>
+      <div class="scope-note">All secrets shown here are fake/redacted example values for tool design review — never real credentials.</div>
+    </div>
+  </section>
+
+  <section id="page-recon" class="page">
+
+    <div class="recon-toolbar">
+      <button id="expand-all">Expand all</button>
+      <button id="collapse-all">Collapse all</button>
+    </div>
+
+    <details class="panel" open>
+      <summary><h2>Scope gate</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Host</th><th>IP</th><th>Status</th><th>Reason</th></tr></thead>
+          <tbody><tr><td><code>www.example.com</code></td><td>203.0.113.10</td>
+        <td><span class="status-badge low">In-scope</span></td>
+        <td>matched scope.txt</td></tr>
+<tr><td><code>portal.example.com</code></td><td>203.0.113.11</td>
+        <td><span class="status-badge low">In-scope</span></td>
+        <td>matched scope.txt</td></tr>
+<tr><td><code>vpn.example.com</code></td><td>203.0.113.10</td>
+        <td><span class="status-badge low">In-scope</span></td>
+        <td>matched scope.txt</td></tr>
+<tr><td><code>dev.example.com</code></td><td>198.51.100.10</td>
+        <td><span class="status-badge low">In-scope</span></td>
+        <td>matched web_scope.txt (CDN-fronted, IP outside client range)</td></tr>
+<tr><td><code>api.example.com</code></td><td>198.51.100.11</td>
+        <td><span class="status-badge low">In-scope</span></td>
+        <td>matched web_scope.txt</td></tr>
+<tr><td><code>old-mail.example.com</code></td><td>192.0.2.55</td>
+        <td><span class="status-badge info">Dropped</span></td>
+        <td>explicit out-of-scope.txt match</td></tr>
+<tr><td><code>internal.example.com</code></td><td>192.0.2.56</td>
+        <td><span class="status-badge info">Dropped</span></td>
+        <td>no scope.txt/web_scope.txt match</td></tr></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>DNS records</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table><thead><tr><th>Type</th><th>Value</th></tr></thead><tbody><tr><td>A</td><td>203.0.113.10, 203.0.113.11</td></tr>
+<tr><td>MX</td><td>10 mail.example.com.</td></tr>
+<tr><td>NS</td><td>ns1.example.com., ns2.example.com.</td></tr>
+<tr><td>TXT</td><td>&quot;v=spf1 include:_spf.example.com -all&quot;</td></tr></tbody></table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>WHOIS</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody><tr><td>Registrar</td><td>Example Registrar Inc.</td></tr>
+<tr><td>Created</td><td>2001-05-14</td></tr>
+<tr><td>Expires</td><td>2027-05-14</td></tr>
+<tr><td>Name Servers</td><td>NS1.EXAMPLE.COM, NS2.EXAMPLE.COM</td></tr></tbody></table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Subdomains discovered (12)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <ul class="domain-list"><li><code>api.example.com</code></li>
+<li><code>blog.example.com</code></li>
+<li><code>cdn.example.com</code></li>
+<li><code>dev.example.com</code></li>
+<li><code>internal.example.com</code></li>
+<li><code>mail.example.com</code></li>
+<li><code>old-mail.example.com</code></li>
+<li><code>portal.example.com</code></li>
+<li><code>staging.example.com</code></li>
+<li><code>test.example.com</code></li>
+<li><code>vpn.example.com</code></li>
+<li><code>www.example.com</code></li></ul>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Alive hosts (HTTP/HTTPS probe)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Host</th><th>IP</th><th>Status</th><th>Title</th></tr></thead>
+          <tbody><tr><td><code>www.example.com</code></td><td>203.0.113.10</td>
+        <td><span class="status-badge low">200</span></td>
+        <td>Example Corp</td></tr>
+<tr><td><code>portal.example.com</code></td><td>203.0.113.11</td>
+        <td><span class="status-badge low">200</span></td>
+        <td>Employee Portal</td></tr>
+<tr><td><code>vpn.example.com</code></td><td>203.0.113.10</td>
+        <td><span class="status-badge info">403</span></td>
+        <td></td></tr>
+<tr><td><code>dev.example.com</code></td><td>198.51.100.10</td>
+        <td><span class="status-badge info">301</span></td>
+        <td></td></tr>
+<tr><td><code>api.example.com</code></td><td>198.51.100.11</td>
+        <td><span class="status-badge low">200</span></td>
+        <td></td></tr>
+<tr><td><code>old-mail.example.com</code></td><td>192.0.2.55</td>
+        <td><span class="status-badge low">200</span></td>
+        <td>Roundcube Webmail</td></tr>
+<tr><td><code>internal.example.com</code></td><td>192.0.2.56</td>
+        <td><span class="status-badge low">200</span></td>
+        <td>Jenkins</td></tr></tbody>
+        </table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Port scan results (in-scope hosts only)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+      <div class="host-block">
+        <h3>203.0.113.10</h3>
+        <table>
+          <thead><tr><th>Port</th><th>Proto</th><th>Service</th><th>Product</th></tr></thead>
+          <tbody>
+          <tr><td>22</td><td>tcp</td><td>ssh</td><td>OpenSSH 8.9p1</td></tr><tr><td>80</td><td>tcp</td><td>http</td><td>nginx 1.24.0</td></tr><tr><td>443</td><td>tcp</td><td>https</td><td>nginx 1.24.0</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="host-block">
+        <h3>203.0.113.11</h3>
+        <table>
+          <thead><tr><th>Port</th><th>Proto</th><th>Service</th><th>Product</th></tr></thead>
+          <tbody>
+          <tr><td>443</td><td>tcp</td><td>https</td><td>Apache 2.4.57</td></tr><tr><td>3389</td><td>tcp</td><td>ms-wbt-server</td><td></td></tr>
+          </tbody>
+        </table>
+      </div></div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>JS analysis — discovered endpoints</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table><thead><tr><th>Endpoint</th><th>Why it's flagged</th><th>Severity</th></tr></thead><tbody><tr><td><code>portal.example.com/api/internal/admin/reset-password</code></td><td>Internal admin API — reset-password path exposed in bundle</td>
+        <td><span class="status-badge high">High</span></td></tr>
+<tr><td><code>portal.example.com/actuator/env</code></td><td>Spring Boot actuator — env dump can leak config secrets</td>
+        <td><span class="status-badge high">High</span></td></tr>
+<tr><td><code>www.example.com/api/v0/legacy/export</code></td><td>Unversioned legacy endpoint still referenced</td>
+        <td><span class="status-badge low">Low</span></td></tr></tbody></table>
+        <div class="scope-note">Full raw jsleak output: <code>JS/jsleak.txt</code>. Secrets are shown on the Leaked &amp; Sensitive Data tab, not repeated here.</div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Vulnerability candidate checklist (manual verification required)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table>
+          <thead><tr><th>Class</th><th>Candidate endpoint</th><th>Full list</th></tr></thead>
+          <tbody><tr><td>SQLi</td><td><code>api.example.com/v0/legacy/export?id=1</code></td><td><code>Loot/vuln_candidates/sqli.txt</code></td></tr>
+<tr><td>XSS</td><td><code>www.example.com/search?q=test</code></td><td><code>Loot/vuln_candidates/xss.txt</code></td></tr>
+<tr><td>LFI</td><td><code>api.example.com/v0/legacy/export?format=../../etc/passwd</code></td><td><code>Loot/vuln_candidates/lfi.txt</code></td></tr>
+<tr><td>Open Redirect</td><td><code>www.example.com/old-promo?id=1&amp;next=https://example.net</code></td><td><code>Loot/vuln_candidates/redirect.txt</code></td></tr>
+<tr><td>IDOR</td><td><code>api.example.com/v0/legacy/export?id=1</code></td><td><code>Loot/vuln_candidates/idor.txt</code></td></tr>
+<tr><td>Debug/Logic exposure</td><td><code>api.example.com/v0/legacy/export?debug=true</code></td><td><code>Loot/vuln_candidates/debug_logic.txt</code></td></tr>
+<tr><td>SSRF</td><td><code>— none flagged this engagement —</code></td><td><code>Loot/vuln_candidates/ssrf.txt</code></td></tr>
+<tr><td>RCE</td><td><code>— none flagged this engagement —</code></td><td><code>Loot/vuln_candidates/rce.txt</code></td></tr>
+<tr><td>SSTI</td><td><code>— none flagged this engagement —</code></td><td><code>Loot/vuln_candidates/ssti.txt</code></td></tr></tbody>
+        </table>
+        <div class="scope-note">These are pattern-matched candidates (parameter names that <em>look</em> exploitable), not confirmed vulnerabilities — this tool never auto-exploits. Verify each manually before reporting.</div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>WordPress</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table><thead><tr><th>Plugin / Theme</th><th>Version</th><th>What it's vulnerable to</th></tr></thead><tbody><tr><td>WordPress Core</td><td>5.8</td><td>Multiple public CVEs — 3 major versions behind latest (6.6)</td></tr>
+<tr><td>contact-form-7 (plugin)</td><td>5.4</td><td>CVE-2023-XXXX — reflected XSS</td></tr></tbody></table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Service / vulnerability checks</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+
+        <h3>SSL/TLS — legacy protocol support</h3>
+        <table>
+          <thead><tr><th>IP / FQDN</th><th>TLS 1.0</th><th>TLS 1.1</th></tr></thead>
+          <tbody><tr><td><code>www.example.com (203.0.113.10)</code></td>
+        <td><span class="status-badge low">No</span></td>
+        <td><span class="status-badge low">No</span></td></tr>
+<tr><td><code>portal.example.com (203.0.113.11)</code></td>
+        <td><span class="status-badge medium">Yes</span></td>
+        <td><span class="status-badge medium">Yes</span></td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">IKE-Scan — PSK hash exposure</h3>
+        <table>
+          <thead><tr><th>Asset</th><th>Hash found?</th><th>Detail</th></tr></thead>
+          <tbody><tr><td><code>203.0.113.10:500/udp</code></td>
+        <td><span class="status-badge high">Yes</span></td>
+        <td>Aggressive mode enabled — PSK hash retrievable</td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">Subzy — subdomain takeover likelihood</h3>
+        <table>
+          <thead><tr><th>Subdomain</th><th>Likelihood of takeover</th><th>Detail</th></tr></thead>
+          <tbody><tr><td><code>dev.example.com -&gt; old-saas-provider.io</code></td>
+        <td><span class="status-badge critical">85%</span></td>
+        <td>Provider-side resource confirmed unclaimed</td></tr>
+<tr><td><code>vpn.example.com</code></td>
+        <td><span class="status-badge low">0%</span></td>
+        <td>CNAME resolves to owned infrastructure</td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">SocialHunter — broken social/asset links</h3>
+        <table>
+          <thead><tr><th>Asset</th><th>Broken link</th><th>Detail</th></tr></thead>
+          <tbody><tr><td><code>www.example.com</code></td><td><code>https://twitter.com/examplecorp</code></td><td>Account suspended — handle available for squatting</td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">Clickjack — frame-ancestors protection</h3>
+        <table>
+          <thead><tr><th>Asset</th><th>Vulnerable</th><th>Detail</th></tr></thead>
+          <tbody><tr><td><code>www.example.com</code></td>
+        <td><span class="status-badge high">Yes</span></td>
+        <td></td></tr>
+<tr><td><code>portal.example.com</code></td>
+        <td><span class="status-badge high">Yes</span></td>
+        <td></td></tr>
+<tr><td><code>api.example.com</code></td>
+        <td><span class="status-badge low">No</span></td>
+        <td>X-Frame-Options: SAMEORIGIN present</td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">SSH / Git exposure checks</h3>
+        <table>
+          <thead><tr><th>Tool</th><th>Target</th><th>Result</th><th>Raw output</th></tr></thead>
+          <tbody><tr><td>ssh-audit</td><td><code>203.0.113.10:22</code></td><td>OpenSSH 8.9p1 — no weak algorithms detected</td><td><code>MISC/ssh-audit.txt</code></td></tr>
+<tr><td>git exposure check</td><td><code>portal.example.com/.git/</code></td><td>Not exposed (404)</td><td><code>MISC/git_exposure.txt</code></td></tr></tbody>
+        </table>
+
+        <h3 style="margin-top:20px">Not run this engagement (opt-in, gated)</h3>
+        <table>
+          <thead><tr><th>Tool</th><th>Note</th></tr></thead>
+          <tbody><tr><td>nuclei</td><td>opt-in, not run this engagement (--vuln-scan not set)</td></tr>
+<tr><td>nikto</td><td>opt-in, not run this engagement (--vuln-scan not set)</td></tr></tbody>
+        </table>
+
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Cloud assets</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <table><thead><tr><th>Provider</th><th>Resource</th><th>Status</th></tr></thead><tbody><tr><td>AWS S3</td><td><code>example-corp-backups.s3.amazonaws.com</code></td>
+        <td><span class="status-badge high">Public</span></td></tr>
+<tr><td>Azure Blob</td><td><code>examplecorpassets.blob.core.windows.net</code></td>
+        <td><span class="status-badge low">Private</span></td></tr></tbody></table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Screenshots</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <div class="shot-grid">
+      <div class="shot-card">
+        <div class="shot-host">www.example.com</div>
+        <div class="shot-placeholder">Screenshot not rendered in this preview</div>
+        <div class="shot-path">subdomain/eyewitness/screens/www.example.com.png</div>
+      </div>
+
+      <div class="shot-card">
+        <div class="shot-host">portal.example.com</div>
+        <div class="shot-placeholder">Screenshot not rendered in this preview</div>
+        <div class="shot-path">subdomain/eyewitness/screens/portal.example.com.png</div>
+      </div>
+
+      <div class="shot-card">
+        <div class="shot-host">vpn.example.com</div>
+        <div class="shot-placeholder">Screenshot not rendered in this preview</div>
+        <div class="shot-path">subdomain/eyewitness/screens/vpn.example.com.png</div>
+      </div></div>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>OSINT / email gathering</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <div class="email-toolbar">
+          <button id="copy-emails" type="button">Copy all emails</button>
+          <span id="copy-emails-msg" class="copy-msg"></span>
+        </div>
+        <table><thead><tr><th>Email</th><th>Source</th></tr></thead><tbody><tr><td><code class="email-cell">j.doe@example.com</code></td><td>crosslinked (LinkedIn)</td></tr>
+<tr><td><code class="email-cell">a.smith@example.com</code></td><td>crosslinked (LinkedIn)</td></tr>
+<tr><td><code class="email-cell">admin@example.com</code></td><td>metagoofil (PDF metadata)</td></tr>
+<tr><td><code class="email-cell">support@example.com</code></td><td>bridgekeeper</td></tr></tbody></table>
+      </div>
+    </details>
+
+    <details class="panel">
+      <summary><h2>Per-stage raw output files (one .txt per tool that ran, absolute rule)</h2><span class="chevron">▶</span></summary>
+      <div class="panel-body">
+        <div class="file-list">
+          Stage 1 — <code>subdomain/subscraper.txt</code> <code>amass_passive.txt</code> <code>subfinder.txt</code> <code>urlscan_subs.txt</code> → <code>all_passive_domain.txt</code> · <code>amass_active.txt</code> <code>reverse_dns.txt</code> → <code>all_activeScan_domain.txt</code> → <code>all_domain.txt</code><br>
+          Stage 2 — <code>subdomain/alive_domain.txt</code><br>
+          Stage 3 — <code>subdomain/INSCOPE_domain.txt</code> <code>INSCOPE_subdomain_ip.txt</code> <code>OUT_OF_SCOPE_domain.txt</code><br>
+          Stage 4 — <code>nmap/naabu.txt</code> <code>nmap.txt</code> <code>smap.txt</code> <code>shodan.txt</code><br>
+          Stage 5 — <code>Loot/katana.txt</code> <code>Loot/gau.txt</code> <code>Loot/arjun.txt</code> <code>Loot/cariddi.txt</code> <code>dirbrute/ffuf_&lt;host&gt;.txt</code> · triage: <code>Loot/vuln_candidates/{sqli,xss,lfi,ssrf,redirect,idor,rce,ssti,debug_logic}.txt</code><br>
+          Stage 6 — <code>JS/js_active.txt</code> <code>js_passive.txt</code> <code>all_js.txt</code> <code>js_live.txt</code> <code>jsleak.txt</code> <code>JS/trufflehog.txt</code><br>
+          Stage 8 — <code>MISC/cloud_assets.txt</code><br>
+          Stage 9 — <code>wpscan/&lt;host&gt;.txt</code> <code>MISC/sslscan.txt</code> <code>MISC/testssl.txt</code> <code>MISC/ssh-audit.txt</code> <code>MISC/ike-scan.txt</code> <code>MISC/subzy.txt</code> <code>MISC/socialhunter.txt</code> <code>MISC/clickjack_poc.html</code> <code>MISC/git_exposure.txt</code> <code>MISC/nuclei.txt</code> <code>MISC/nikto.txt</code> (nuclei/nikto only when <code>--vuln-scan</code> is passed)<br>
+          Stage 10 — <code>email/All_Emails.txt</code>
+        </div>
+        <div class="scope-note">Rule: every tool actually executed writes its own named <code>.txt</code> (or documented alternate extension) — never silently folded into another tool's file.</div>
+      </div>
+    </details>
+
+  </section>
+
+</main>
+
+<footer>Generated by UNDERTOW — mock example output for internal design review, not a real engagement.</footer>
+
+<script>
+(function() {
+  var tabBtns = document.querySelectorAll('.tab-btn');
+  var pages = document.querySelectorAll('.page');
+  tabBtns.forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      tabBtns.forEach(function(b) { b.classList.remove('active'); });
+      pages.forEach(function(p) { p.classList.remove('active'); });
+      btn.classList.add('active');
+      document.getElementById('page-' + btn.dataset.page).classList.add('active');
+    });
+  });
+
+  var activeSev = new Set();
+  var activeVtype = new Set();
+  var rows = document.querySelectorAll('#vectors-tbody .frow');
+  var emptyMsg = document.getElementById('vectors-empty');
+
+  function applyFilters() {
+    var visible = 0;
+    rows.forEach(function(row) {
+      var sevOk = activeSev.size === 0 || activeSev.has(row.dataset.sev);
+      var vtOk = activeVtype.size === 0 || activeVtype.has(row.dataset.vtype);
+      var show = sevOk && vtOk;
+      row.classList.toggle('hidden', !show);
+      if (show) visible++;
+    });
+    emptyMsg.style.display = visible === 0 ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('.chip.sev-filter').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var sev = chip.dataset.filterSev;
+      if (activeSev.has(sev)) { activeSev.delete(sev); chip.classList.remove('active'); }
+      else { activeSev.add(sev); chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+  document.querySelectorAll('.chip[data-filter-vtype]').forEach(function(chip) {
+    chip.addEventListener('click', function() {
+      var vt = chip.dataset.filterVtype;
+      if (activeVtype.has(vt)) { activeVtype.delete(vt); chip.classList.remove('active'); }
+      else { activeVtype.add(vt); chip.classList.add('active'); }
+      applyFilters();
+    });
+  });
+  document.getElementById('clear-filters').addEventListener('click', function() {
+    activeSev.clear(); activeVtype.clear();
+    document.querySelectorAll('.chip.active').forEach(function(c) { c.classList.remove('active'); });
+    applyFilters();
+  });
+
+  var expandAllBtn = document.getElementById('expand-all');
+  var collapseAllBtn = document.getElementById('collapse-all');
+  if (expandAllBtn) {
+    expandAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('#page-recon details.panel').forEach(function(d) { d.open = true; });
+    });
+  }
+  if (collapseAllBtn) {
+    collapseAllBtn.addEventListener('click', function() {
+      document.querySelectorAll('#page-recon details.panel').forEach(function(d) { d.open = false; });
+    });
+  }
+
+  var copyEmailsBtn = document.getElementById('copy-emails');
+  if (copyEmailsBtn) {
+    copyEmailsBtn.addEventListener('click', function() {
+      var emails = Array.prototype.map.call(
+        document.querySelectorAll('#page-recon .email-cell'),
+        function(el) { return el.textContent.trim(); }
+      );
+      var text = emails.join('\n');
+      var msg = document.getElementById('copy-emails-msg');
+      function done() {
+        if (msg) {
+          msg.textContent = 'Copied ' + emails.length + ' email(s) to clipboard';
+          setTimeout(function() { msg.textContent = ''; }, 2500);
+        }
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done);
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+        done();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>

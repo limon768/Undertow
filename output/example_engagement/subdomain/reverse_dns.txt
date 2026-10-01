@@ -1,0 +1,2 @@
+203.0.113.10 -> www.example.com
+203.0.113.11 -> portal.example.com

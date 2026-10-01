@@ -1,0 +1,1 @@
+https://portal.example.com/wp-content/uploads/ -> Index of / (directory listing)

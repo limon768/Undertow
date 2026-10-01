@@ -1,0 +1,3 @@
+# archived only — never read downstream
+old-mail.example.com -> 192.0.2.55  (matched out-of-scope.txt exclusion)
+internal.example.com -> 192.0.2.56  (IP not in scope.txt, host not in web_scope.txt)

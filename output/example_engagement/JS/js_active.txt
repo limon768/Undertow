@@ -1,0 +1,2 @@
+https://www.example.com/static/app.min.js
+https://portal.example.com/assets/config.js

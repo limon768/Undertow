@@ -1,0 +1,3 @@
+https://www.example.com/static/app.min.js
+https://www.example.com/static/legacy/auth-2023.js
+https://portal.example.com/assets/config.js
