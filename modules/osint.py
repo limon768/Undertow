@@ -46,7 +46,7 @@ def _extract_emails(text: str) -> set[str]:
 
 # ----------------------------------------------------------------- metagoofil
 
-def _run_metagoofil(domain: str, outdir: Path, timeout: int) -> ToolResult:
+def _run_metagoofil(domain: str, outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("metagoofil"):
         return ToolResult(tool="metagoofil", ran=False, error="not installed")
 
@@ -62,10 +62,12 @@ def _run_metagoofil(domain: str, outdir: Path, timeout: int) -> ToolResult:
              "-l", "20", "-n", "10", "-o", str(dl_dir), "-e", "5", "-w"],
             capture_output=True, text=True, timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, "metagoofil.txt", exc.stdout or "", exc.stderr or "")
         shutil.rmtree(dl_dir, ignore_errors=True)
         return ToolResult(tool="metagoofil", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, "metagoofil.txt", proc.stdout, proc.stderr)
     emails: set[str] = set()
     downloaded = any(dl_dir.iterdir()) if dl_dir.exists() else False
     if downloaded and runner.have("exiftool"):
@@ -74,9 +76,10 @@ def _run_metagoofil(domain: str, outdir: Path, timeout: int) -> ToolResult:
                 ["exiftool", "-Author", "-Creator", "-LastModifiedBy", "-r", str(dl_dir)],
                 capture_output=True, text=True, timeout=min(timeout, 60),
             )
+            runner.save_raw(engagement_root, "exiftool_metagoofil.txt", ex_proc.stdout, ex_proc.stderr)
             emails = _extract_emails(ex_proc.stdout)
-        except subprocess.TimeoutExpired:
-            pass
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, "exiftool_metagoofil.txt", exc.stdout or "", exc.stderr or "")
     shutil.rmtree(dl_dir, ignore_errors=True)
 
     outfile = outdir / "metagoofil.txt"
@@ -87,7 +90,7 @@ def _run_metagoofil(domain: str, outdir: Path, timeout: int) -> ToolResult:
 
 # ---------------------------------------------------------------- crosslinked
 
-def _run_crosslinked(company_name: str, domain: str, outdir: Path, timeout: int) -> ToolResult:
+def _run_crosslinked(company_name: str, domain: str, outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not toolcheck.crosslinked_available():
         return ToolResult(tool="crosslinked", ran=False, error="not installed")
 
@@ -99,9 +102,11 @@ def _run_crosslinked(company_name: str, domain: str, outdir: Path, timeout: int)
              "-f", nformat, "-o", str(outfile_base), company_name],
             capture_output=True, text=True, timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, "crosslinked.txt", exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="crosslinked", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, "crosslinked.txt", proc.stdout, proc.stderr)
     emails: set[str] = set()
     native_txt = outfile_base.with_suffix(".txt")
     if native_txt.exists():
@@ -116,7 +121,7 @@ def _run_crosslinked(company_name: str, domain: str, outdir: Path, timeout: int)
 
 # --------------------------------------------------------------- bridgekeeper
 
-def _run_bridgekeeper(company_name: str, domain: str, outdir: Path, timeout: int) -> ToolResult:
+def _run_bridgekeeper(company_name: str, domain: str, outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not toolcheck.bridgekeeper_available():
         return ToolResult(tool="bridgekeeper", ran=False, error="not installed")
 
@@ -128,10 +133,12 @@ def _run_bridgekeeper(company_name: str, domain: str, outdir: Path, timeout: int
              "-c", company_name, "-f", nformat, "-d", domain, "-o", str(bk_outdir)],
             capture_output=True, text=True, timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, "bridgekeeper.txt", exc.stdout or "", exc.stderr or "")
         shutil.rmtree(bk_outdir, ignore_errors=True)
         return ToolResult(tool="bridgekeeper", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, "bridgekeeper.txt", proc.stdout, proc.stderr)
     emails: set[str] = set()
     if bk_outdir.exists():
         for f in bk_outdir.rglob("*"):
@@ -158,11 +165,11 @@ def run_stage10(
 
     stage = StageResult(stage="Stage 10 — OSINT / Email Gathering")
 
-    results = [stage.add(_run_metagoofil(domain, outdir, timeout))]
+    results = [stage.add(_run_metagoofil(domain, outdir, timeout, engagement_root))]
 
     if company_name:
-        results.append(stage.add(_run_crosslinked(company_name, domain, outdir, timeout)))
-        results.append(stage.add(_run_bridgekeeper(company_name, domain, outdir, timeout)))
+        results.append(stage.add(_run_crosslinked(company_name, domain, outdir, timeout, engagement_root)))
+        results.append(stage.add(_run_bridgekeeper(company_name, domain, outdir, timeout, engagement_root)))
     else:
         stage.add(ToolResult(
             tool="crosslinked+bridgekeeper", ran=False,

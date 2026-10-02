@@ -93,7 +93,7 @@ def _strip_vendor_libs(urls: list[str]) -> list[str]:
 
 # --------------------------------------------------------------- crawl + archive
 
-def _run_katana_js(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_katana_js(inscope_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("katana"):
         return ToolResult(tool="katana-js", ran=False, error="not installed")
     try:
@@ -103,15 +103,17 @@ def _run_katana_js(inscope_file: Path, outfile: Path, timeout: int) -> ToolResul
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="katana-js", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     js_urls = _filter_js(proc.stdout.splitlines())
     runner.write_lines(outfile, js_urls)
     return ToolResult(tool="katana-js", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(js_urls))
 
 
-def _run_gau_js(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_gau_js(inscope_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("gau"):
         return ToolResult(tool="gau-js", ran=False, error="not installed")
     hosts = runner.read_lines(inscope_file)
@@ -123,9 +125,11 @@ def _run_gau_js(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="gau-js", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     js_urls = _filter_js(proc.stdout.splitlines())
     runner.write_lines(outfile, js_urls)
     return ToolResult(tool="gau-js", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(js_urls))
@@ -133,7 +137,7 @@ def _run_gau_js(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
 
 # ----------------------------------------------------------------------- alive
 
-def _run_httpx_live(all_js_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_httpx_live(all_js_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("httpx"):
         return ToolResult(tool="httpx-js", ran=False, error="not installed")
     urls = runner.read_lines(all_js_file)
@@ -147,9 +151,11 @@ def _run_httpx_live(all_js_file: Path, outfile: Path, timeout: int) -> ToolResul
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="httpx-js", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = []
     for line in proc.stdout.splitlines():
         try:
@@ -264,7 +270,7 @@ def _recover_sourcemaps(js_live_file: Path, outdir: Path, timeout: int) -> tuple
     return result, recovered_dirs
 
 
-def _beautify_minified(js_live_file: Path, already_recovered: dict, outdir: Path, timeout: int) -> ToolResult:
+def _beautify_minified(js_live_file: Path, already_recovered: dict, outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     """js-beautify fallback for minified JS that had no recoverable source map —
     improves jsleak/semgrep's hit rate on code that's otherwise one giant line.
     """
@@ -290,11 +296,13 @@ def _beautify_minified(js_live_file: Path, already_recovered: dict, outdir: Path
         out_path = beaut_dir / f"{name}.js"
         raw_path.write_text(resp.text, errors="replace")
         try:
-            subprocess.run(
+            beaut_proc = subprocess.run(
                 ["js-beautify", "-o", str(out_path), str(raw_path)],
                 capture_output=True, text=True, timeout=30,
             )
-        except subprocess.TimeoutExpired:
+            runner.save_raw(engagement_root, f"js-beautify_{name}.txt", beaut_proc.stdout, beaut_proc.stderr)
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"js-beautify_{name}.txt", exc.stdout or "", exc.stderr or "")
             continue
         finally:
             raw_path.unlink(missing_ok=True)
@@ -312,7 +320,7 @@ def _host_of(url: str) -> str:
     return url.split("://", 1)[-1].split("/", 1)[0]
 
 
-def _run_jsleak(js_live_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_jsleak(js_live_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     """Runs jsleak per in-scope host rather than over the whole js_live.txt in
     one call. jsleak has no internal per-request timeout, and -l (linkFinder)
     can chase slow/unresponsive endpoints on one host (e.g. a VPN/Citrix
@@ -342,8 +350,10 @@ def _run_jsleak(js_live_file: Path, outfile: Path, timeout: int) -> ToolResult:
                 text=True,
                 timeout=per_host_timeout,
             )
+            runner.save_raw(engagement_root, f"jsleak_{host}.txt", proc.stdout, proc.stderr)
             all_lines.extend(ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip())
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"jsleak_{host}.txt", exc.stdout or "", exc.stderr or "")
             errors.append(f"{host} (timeout after {per_host_timeout}s)")
 
     runner.write_lines(outfile, all_lines)
@@ -371,7 +381,7 @@ def _download_js(urls: list[str], dest_dir: Path, timeout: int) -> dict:
     return mapping
 
 
-def _run_trufflehog(js_live_file: Path, outfile: Path, timeout: int, extra_scan_dirs: list[Path] | None = None) -> ToolResult:
+def _run_trufflehog(js_live_file: Path, outfile: Path, timeout: int, engagement_root: Path, extra_scan_dirs: list[Path] | None = None) -> ToolResult:
     if not runner.have("trufflehog"):
         return ToolResult(tool="trufflehog", ran=False, error="not installed")
     urls = _live_urls(js_live_file)
@@ -392,9 +402,11 @@ def _run_trufflehog(js_live_file: Path, outfile: Path, timeout: int, extra_scan_
                 text=True,
                 timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
             return ToolResult(tool="trufflehog", ran=True, error=f"timeout after {timeout}s")
 
+        runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
         lines = []
         for line in proc.stdout.splitlines():
             try:
@@ -416,7 +428,7 @@ def _run_trufflehog(js_live_file: Path, outfile: Path, timeout: int, extra_scan_
 
 # ---------------------------------------------------------- semgrep (opt-in only)
 
-def _run_semgrep(js_live_file: Path, outfile: Path, timeout: int, extra_scan_dirs: list[Path] | None = None) -> ToolResult:
+def _run_semgrep(js_live_file: Path, outfile: Path, timeout: int, engagement_root: Path, extra_scan_dirs: list[Path] | None = None) -> ToolResult:
     """Opt-in (--js-semgrep). Per CLAUDE.md this was previously dropped as "wrong
     tool for black-box minified JS" — that's still largely true for the raw
     minified bundle (semgrep's value is AST pattern matching against readable
@@ -449,9 +461,11 @@ def _run_semgrep(js_live_file: Path, outfile: Path, timeout: int, extra_scan_dir
                 text=True,
                 timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
             return ToolResult(tool="semgrep", ran=True, error=f"timeout after {timeout}s")
 
+        runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
         output = proc.stdout or proc.stderr or ""
         for local_path, source_url in url_map.items():
             output = output.replace(local_path, source_url)
@@ -471,7 +485,7 @@ def _run_semgrep(js_live_file: Path, outfile: Path, timeout: int, extra_scan_dir
 
 # --------------------------------------------------------- nuclei (opt-in only)
 
-def _run_nuclei_creds(js_live_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_nuclei_creds(js_live_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("nuclei"):
         return ToolResult(tool="nuclei-js", ran=False, error="not installed")
     urls = _live_urls(js_live_file)
@@ -485,9 +499,11 @@ def _run_nuclei_creds(js_live_file: Path, outfile: Path, timeout: int) -> ToolRe
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="nuclei-js", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = [ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip()]
     runner.write_lines(outfile, lines)
     return ToolResult(tool="nuclei-js", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
@@ -513,8 +529,8 @@ def run_stage6(
         stage.add(ToolResult(tool="js_analysis", ran=False, error="INSCOPE_domain.txt is empty — nothing to crawl"))
         return stage
 
-    active_r = stage.add(_run_katana_js(inscope_domain_file, outdir / "js_active.txt", timeout))
-    passive_r = stage.add(_run_gau_js(inscope_domain_file, outdir / "js_passive.txt", timeout))
+    active_r = stage.add(_run_katana_js(inscope_domain_file, outdir / "js_active.txt", timeout, engagement_root))
+    passive_r = stage.add(_run_gau_js(inscope_domain_file, outdir / "js_passive.txt", timeout, engagement_root))
 
     # Each tool's own file above stays raw/unfiltered (Rule 1 fidelity). The
     # merge that everything downstream actually scans drops known vendor/CDN
@@ -527,19 +543,19 @@ def run_stage6(
     runner.write_lines(all_js, _strip_vendor_libs(list(raw_urls)))
     stage.outputs["all_js"] = all_js
 
-    live_r = stage.add(_run_httpx_live(all_js, outdir / "js_live.txt", timeout))
+    live_r = stage.add(_run_httpx_live(all_js, outdir / "js_live.txt", timeout, engagement_root))
     if not live_r.outfile:
         return stage
     stage.outputs["js_live"] = live_r.outfile
 
-    stage.add(_run_jsleak(live_r.outfile, outdir / "jsleak.txt", timeout))
+    stage.add(_run_jsleak(live_r.outfile, outdir / "jsleak.txt", timeout, engagement_root))
 
     # Automatic .map / minified handling: recover original source from any
     # source map we can find, then js-beautify whatever's left unmapped —
     # both feed into trufflehog/semgrep below as extra scan directories.
     sourcemap_r, recovered_dirs = _recover_sourcemaps(live_r.outfile, outdir, timeout)
     stage.add(sourcemap_r)
-    beautify_r = stage.add(_beautify_minified(live_r.outfile, recovered_dirs, outdir, timeout))
+    beautify_r = stage.add(_beautify_minified(live_r.outfile, recovered_dirs, outdir, timeout, engagement_root))
 
     extra_scan_dirs = []
     if recovered_dirs:
@@ -547,12 +563,12 @@ def run_stage6(
     if beautify_r.outfile:
         extra_scan_dirs.append(outdir / "beautified")
 
-    stage.add(_run_trufflehog(live_r.outfile, outdir / "trufflehog.txt", timeout, extra_scan_dirs=extra_scan_dirs))
+    stage.add(_run_trufflehog(live_r.outfile, outdir / "trufflehog.txt", timeout, engagement_root, extra_scan_dirs=extra_scan_dirs))
 
     if js_semgrep:
-        stage.add(_run_semgrep(live_r.outfile, outdir / "semgrep.txt", timeout, extra_scan_dirs=extra_scan_dirs))
+        stage.add(_run_semgrep(live_r.outfile, outdir / "semgrep.txt", timeout, engagement_root, extra_scan_dirs=extra_scan_dirs))
 
     if vuln_scan:
-        stage.add(_run_nuclei_creds(live_r.outfile, outdir / "nuclei_js.txt", timeout))
+        stage.add(_run_nuclei_creds(live_r.outfile, outdir / "nuclei_js.txt", timeout, engagement_root))
 
     return stage

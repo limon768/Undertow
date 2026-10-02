@@ -12,7 +12,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from modules import cloud_assets, grading, http_probe, js_analysis, osint, ports, screenshots, scope_gate, service_checks, setup, subdomains, toolcheck, web_discovery
+from modules import cloud_assets, config, grading, http_probe, js_analysis, osint, ports, screenshots, scope_gate, service_checks, setup, subdomains, toolcheck, web_discovery
 from report.generator_v2 import render_report_v2
 from modules.runner import StageResult, read_lines, write_lines
 
@@ -63,7 +63,7 @@ notes:
 CHECKED_TOOLS = [
     "amass", "subfinder", "httpx", "dnsx", "grepcidr", "cariddi", "subscraper",
     "naabu", "nmap", "smap", "shodan",
-    "katana", "gau", "gf", "arjun", "ffuf",
+    "katana", "gau", "gf", "arjun", "ffuf", "github-subdomains",
     "jsleak", "trufflehog", "nuclei", "semgrep", "js-beautify",
     "eyewitness", "cloud_enum",
     "wpscan", "sslscan", "testssl.sh", "ssh-audit", "ike-scan", "subzy", "socialhunter", "nikto",
@@ -163,7 +163,7 @@ def run_pipeline(target: str, root: Path, args) -> None:
 
     stage9 = service_checks.run_stage9(
         stage3.outputs["inscope_domain"], stage3.outputs["inscope_subdomain_ip"], root,
-        timeout=args.timeout, vuln_scan=args.vuln_scan,
+        timeout=args.timeout, vuln_scan=args.vuln_scan, wpscan_api_token=args.wpscan_api_token,
     )
     _print_stage(stage9)
 
@@ -216,7 +216,12 @@ def main():
     scope_group.add_argument("-OS", "--out-of-scope-file", metavar="PATH", help="out-of-scope.txt (optional, always wins)")
 
     stage1_group = parser.add_argument_group("stage 1 — subdomain enumeration")
-    stage1_group.add_argument("--github-token", metavar="TOKEN", help="GitHub token for the optional github-subdomains passive source")
+    stage1_group.add_argument(
+        "--github-token", metavar="TOKEN",
+        help="GitHub token for the optional github-subdomains passive source. Prefer "
+        "GITHUB_TOKEN in .undertow.config (see --config) over passing it here — a CLI "
+        "flag is visible in shell history and `ps`",
+    )
     stage1_group.add_argument("--wordlist", metavar="PATH", help="opt-in puredns+dnsgen permutation bruteforce with this wordlist")
 
     stage4_group = parser.add_argument_group("stage 4 — port scan")
@@ -252,6 +257,11 @@ def main():
         help="opt-in: run nuclei/nikto-class active vuln templates (also gates stage 6's "
         "nuclei credential-disclosure pass), never default",
     )
+    stage9_group.add_argument(
+        "--wpscan-api-token", metavar="TOKEN",
+        help="WPScan vulnerability-DB API token (avoids rate-limiting on -e vp,u). Prefer "
+        "WPSCAN_API_TOKEN in .undertow.config (see --config) over passing it here",
+    )
 
     stage10_group = parser.add_argument_group("stage 10 — OSINT / email gathering")
     stage10_group.add_argument(
@@ -263,6 +273,12 @@ def main():
 
     general_group = parser.add_argument_group("general")
     general_group.add_argument("--timeout", type=int, default=180, metavar="SECONDS", help="per-tool timeout (default: 180)")
+    general_group.add_argument(
+        "--config", metavar="PATH",
+        help="KEY=VALUE token config file (GITHUB_TOKEN, WPSCAN_API_TOKEN). Default: "
+        ".undertow.config in the repo root (see .undertow.config.example). A matching "
+        "--xxx-token flag always overrides the config file value",
+    )
 
     tools_group = parser.add_argument_group("stage 0 — tool check")
     tools_group.add_argument(
@@ -272,6 +288,12 @@ def main():
     tools_group.add_argument("--install", action="store_true", help="with --check-tools, auto-install missing tools")
 
     args = parser.parse_args()
+
+    cfg = config.load_config(Path(args.config) if args.config else None)
+    if not args.github_token:
+        args.github_token = cfg.get("GITHUB_TOKEN")
+    if not args.wpscan_api_token:
+        args.wpscan_api_token = cfg.get("WPSCAN_API_TOKEN")
 
     if args.check_tools:
         print("[*] Stage 0: checking required tools")

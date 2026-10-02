@@ -50,7 +50,7 @@ def _sort_ip(ip: str):
 
 # --------------------------------------------------------------------- naabu
 
-def _run_naabu(ip_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_naabu(ip_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("naabu"):
         return ToolResult(tool="naabu", ran=False, error="not installed")
     try:
@@ -60,9 +60,11 @@ def _run_naabu(ip_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="naabu", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = sorted({ln.strip() for ln in proc.stdout.splitlines() if ln.strip()})
     runner.write_lines(outfile, lines)
     return ToolResult(tool="naabu", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
@@ -121,7 +123,7 @@ def _render_nmap_blocks(hosts_ports: dict) -> str:
     return ("\n\n".join(blocks) + "\n") if blocks else ""
 
 
-def _run_nmap(ip_file: Path, outfile: Path, ports: str, timeout: int) -> ToolResult:
+def _run_nmap(ip_file: Path, outfile: Path, ports: str, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("nmap"):
         return ToolResult(tool="nmap", ran=False, error="not installed")
     try:
@@ -131,9 +133,11 @@ def _run_nmap(ip_file: Path, outfile: Path, ports: str, timeout: int) -> ToolRes
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="nmap", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     if not proc.stdout.strip():
         return ToolResult(tool="nmap", ran=True, error=(proc.stderr or "no output").strip()[:200])
 
@@ -152,7 +156,7 @@ def _run_nmap(ip_file: Path, outfile: Path, ports: str, timeout: int) -> ToolRes
 
 # ---------------------------------------------------------------------- smap
 
-def _run_smap(ip_file: Path, outdir: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_smap(ip_file: Path, outdir: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("smap"):
         return ToolResult(tool="smap", ran=False, error="not installed")
 
@@ -164,10 +168,12 @@ def _run_smap(ip_file: Path, outdir: Path, outfile: Path, timeout: int) -> ToolR
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         json_tmp.unlink(missing_ok=True)
         return ToolResult(tool="smap", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     if not json_tmp.exists():
         return ToolResult(tool="smap", ran=True, error=(proc.stderr or "no output").strip()[:200])
 
@@ -210,14 +216,16 @@ def _shodan_internetdb(ip: str, timeout: int) -> dict | None:
     return {"ip": ip, "org": "", "vulns": data.get("vulns", [])}
 
 
-def _shodan_cli_host(ip: str, timeout: int) -> dict | None:
+def _shodan_cli_host(ip: str, timeout: int, engagement_root: Path) -> dict | None:
     """Prefer the already-authenticated `shodan` CLI (gives org + vulns) when present."""
     if not runner.have("shodan"):
         return None
     try:
         proc = subprocess.run(["shodan", "host", ip], capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, f"shodan_{ip}.txt", exc.stdout or "", exc.stderr or "")
         return None
+    runner.save_raw(engagement_root, f"shodan_{ip}.txt", proc.stdout, proc.stderr)
     if proc.returncode != 0:
         return None  # e.g. "no information available" for this IP — not an error worth surfacing
 
@@ -235,7 +243,7 @@ def _shodan_cli_host(ip: str, timeout: int) -> dict | None:
     return {"ip": ip, "org": org, "vulns": vulns}
 
 
-def _run_shodan(ips: list[str], outfile: Path, timeout: int, *, use_cli: bool = False) -> ToolResult:
+def _run_shodan(ips: list[str], outfile: Path, timeout: int, engagement_root: Path, *, use_cli: bool = False) -> ToolResult:
     """use_cli=True spends one `shodan host` API query credit per IP (gets org +
     CVEs). Default is the free, no-auth InternetDB endpoint — same CVE/port data,
     no `org` field, no quota cost. Large scopes can easily exceed a free-tier
@@ -247,7 +255,7 @@ def _run_shodan(ips: list[str], outfile: Path, timeout: int, *, use_cli: bool = 
     lines = []
     any_lookup_ok = False
     for ip in ips:
-        result = (_shodan_cli_host(ip, timeout) if use_cli else None) or _shodan_internetdb(ip, timeout)
+        result = (_shodan_cli_host(ip, timeout, engagement_root) if use_cli else None) or _shodan_internetdb(ip, timeout)
         if result is None:
             continue
         any_lookup_ok = True
@@ -286,10 +294,10 @@ def run_stage4(
     runner.write_lines(ip_file, ips)
 
     try:
-        stage.add(_run_naabu(ip_file, outdir / "naabu.txt", timeout))
-        stage.add(_run_nmap(ip_file, outdir / "nmap.txt", ports, timeout))
-        stage.add(_run_smap(ip_file, outdir, outdir / "smap.txt", timeout))
-        stage.add(_run_shodan(ips, outdir / "shodan.txt", timeout, use_cli=shodan_use_cli))
+        stage.add(_run_naabu(ip_file, outdir / "naabu.txt", timeout, engagement_root))
+        stage.add(_run_nmap(ip_file, outdir / "nmap.txt", ports, timeout, engagement_root))
+        stage.add(_run_smap(ip_file, outdir, outdir / "smap.txt", timeout, engagement_root))
+        stage.add(_run_shodan(ips, outdir / "shodan.txt", timeout, engagement_root, use_cli=shodan_use_cli))
     finally:
         ip_file.unlink(missing_ok=True)
 

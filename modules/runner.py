@@ -39,6 +39,23 @@ def have(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 
+# Some tools are legitimately slow (full amass enum, nuclei's CVE+DNS template
+# sets, arjun's per-param probing, nikto's full check battery) and routinely
+# blow past the shared --timeout default before producing any output at all.
+# Rather than raising the global default for every tool, each of these gets a
+# floor it's never run under even if --timeout is set lower.
+SLOW_TOOL_MIN_TIMEOUT = {
+    "amass": 600,
+    "arjun": 400,
+    "nuclei": 900,
+    "nikto": 400,
+}
+
+
+def effective_timeout(tool: str, timeout: int) -> int:
+    return max(timeout, SLOW_TOOL_MIN_TIMEOUT.get(tool, 0))
+
+
 def run_tool(
     tool: str,
     argv: list[str],
@@ -112,6 +129,25 @@ def count_lines(path: Path) -> int:
     if not path.exists():
         return 0
     return sum(1 for ln in path.read_text(errors="replace").splitlines() if ln.strip())
+
+
+def save_raw(engagement_root: Path, name: str, stdout: str = "", stderr: str = "") -> Path:
+    """Write a tool's unmodified stdout(+stderr) to RAW/raw_<name>.txt.
+
+    `name` should be the same base name already used for that tool's real
+    Rule-1 output file (e.g. "amass.txt", "ffuf_host.example.com.txt"), so
+    the raw copy's identity matches the processed file's identity 1:1.
+    """
+    raw_dir = engagement_root / "RAW"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    dest = raw_dir / f"raw_{name}"
+    if not dest.name.endswith(".txt"):
+        dest = dest.with_suffix(dest.suffix + ".txt") if dest.suffix else dest.with_name(dest.name + ".txt")
+    parts = [stdout or ""]
+    if stderr and stderr.strip():
+        parts.append("\n--- stderr ---\n" + stderr)
+    dest.write_text("".join(parts))
+    return dest
 
 
 def merge_dedupe(sources: list[Path], out: Path) -> Path:

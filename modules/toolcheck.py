@@ -32,6 +32,11 @@ TOOLS = {
     "shodan":     {"install": None, "note": "pip-installed `shodan` CLI, needs `shodan init <API key>` run manually once"},
     "katana":     {"install": ("go", "github.com/projectdiscovery/katana/cmd/katana@latest")},
     "gau":        {"install": ("go", "github.com/lc/gau/v2/cmd/gau@latest")},
+    "github-subdomains": {
+        "install": ("go", "github.com/gwen001/github-subdomains@latest"),
+        "note": "optional Stage 1 passive source, needs GITHUB_TOKEN in .undertow.config "
+                "(or --github-token)",
+    },
     "gf":         {
         "install": ("go", "github.com/tomnomnom/gf@latest"),
         "note": "also needs a pattern pack in ~/.gf — the binary ships with zero patterns "

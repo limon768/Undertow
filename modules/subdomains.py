@@ -49,7 +49,7 @@ def _clean_subdomains(lines: list[str], domain: str) -> set[str]:
 
 # ---------------------------------------------------------------- 1A passive
 
-def _run_subscraper(domain: str, outfile: Path, timeout: int) -> ToolResult:
+def _run_subscraper(domain: str, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not subscraper_available():
         return ToolResult(tool="subscraper", ran=False, error="not installed")
     # subscraper defaults -o to ./sub_report.txt in whatever cwd it's launched
@@ -63,36 +63,41 @@ def _run_subscraper(domain: str, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         native_report.unlink(missing_ok=True)
         return ToolResult(tool="subscraper", ran=True, error=f"timeout after {timeout}s")
     except OSError as exc:
         native_report.unlink(missing_ok=True)
         return ToolResult(tool="subscraper", ran=True, error=str(exc))
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     found = _clean_subdomains(proc.stdout.splitlines(), domain)
     native_report.unlink(missing_ok=True)
     runner.write_lines(outfile, sorted(found))
     return ToolResult(tool="subscraper", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(found))
 
 
-def _run_amass_to_file(domain: str, outfile: Path, mode: str, timeout: int) -> ToolResult:
+def _run_amass_to_file(domain: str, outfile: Path, mode: str, timeout: int, engagement_root: Path) -> ToolResult:
     """mode is 'passive' or 'active'."""
     argv = ["amass", "enum", f"-{mode}", "-d", domain]
     if mode == "active":
         argv.append("-norecursive")
     if not runner.have("amass"):
         return ToolResult(tool="amass", ran=False, error="not installed")
+    timeout = runner.effective_timeout("amass", timeout)
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="amass", ran=True, error=f"timeout after {timeout}s")
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     found = _clean_subdomains(proc.stdout.splitlines(), domain)
     runner.write_lines(outfile, sorted(found))
     return ToolResult(tool="amass", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(found))
 
 
-def _run_subfinder(domain: str, outfile: Path, timeout: int) -> ToolResult:
+def _run_subfinder(domain: str, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("subfinder"):
         return ToolResult(tool="subfinder", ran=False, error="not installed")
     try:
@@ -102,8 +107,10 @@ def _run_subfinder(domain: str, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="subfinder", ran=True, error=f"timeout after {timeout}s")
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     found = _clean_subdomains(proc.stdout.splitlines(), domain)
     runner.write_lines(outfile, sorted(found))
     return ToolResult(tool="subfinder", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(found))
@@ -131,7 +138,7 @@ def _run_urlscan(domain: str, outfile: Path, timeout: int) -> ToolResult:
     return ToolResult(tool="urlscan", ran=True, returncode=0, outfile=outfile, lines=len(found))
 
 
-def _run_github_subdomains(domain: str, outfile: Path, timeout: int, github_token: str | None) -> ToolResult:
+def _run_github_subdomains(domain: str, outfile: Path, timeout: int, github_token: str | None, engagement_root: Path) -> ToolResult:
     if not github_token:
         return ToolResult(tool="github-subdomains", ran=False, error="optional — no GitHub token provided")
     if not runner.have("github-subdomains"):
@@ -143,8 +150,10 @@ def _run_github_subdomains(domain: str, outfile: Path, timeout: int, github_toke
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="github-subdomains", ran=True, error=f"timeout after {timeout}s")
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     found = _clean_subdomains(proc.stdout.splitlines(), domain)
     runner.write_lines(outfile, sorted(found))
     return ToolResult(tool="github-subdomains", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(found))
@@ -169,7 +178,7 @@ def _expand_scope_ips(scope_file: Path) -> list[str]:
     return ips
 
 
-def _run_dnsx_ptr(scope_file: Path, outdir: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_dnsx_ptr(scope_file: Path, outdir: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not scope_file.exists() or not runner.read_lines(scope_file):
         return ToolResult(tool="dnsx", ran=False, error="no scope.txt IPs/CIDRs to reverse")
     if not runner.have("dnsx"):
@@ -189,11 +198,13 @@ def _run_dnsx_ptr(scope_file: Path, outdir: Path, outfile: Path, timeout: int) -
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="dnsx", ran=True, error=f"timeout after {timeout}s")
     finally:
         ip_file.unlink(missing_ok=True)
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     pairs = set()
     for line in proc.stdout.splitlines():
         try:
@@ -208,7 +219,7 @@ def _run_dnsx_ptr(scope_file: Path, outdir: Path, outfile: Path, timeout: int) -
     return ToolResult(tool="dnsx", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(pairs))
 
 
-def _run_bruteforce(domain: str, wordlist: Path | None, outfile: Path, timeout: int) -> ToolResult:
+def _run_bruteforce(domain: str, wordlist: Path | None, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     """puredns + dnsgen permutation bruteforce — opt-in, only with --wordlist."""
     if wordlist is None:
         return ToolResult(tool="puredns", ran=False, error="optional — no --wordlist given")
@@ -223,9 +234,11 @@ def _run_bruteforce(domain: str, wordlist: Path | None, outfile: Path, timeout: 
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="puredns", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, brute.stdout, brute.stderr)
     found = _clean_subdomains(brute.stdout.splitlines(), domain)
     if found:
         try:
@@ -236,6 +249,7 @@ def _run_bruteforce(domain: str, wordlist: Path | None, outfile: Path, timeout: 
                 text=True,
                 timeout=timeout,
             )
+            runner.save_raw(engagement_root, f"dnsgen_{outfile.name}", perm.stdout, perm.stderr)
             perm_candidates = [l.strip() for l in perm.stdout.splitlines() if l.strip()]
             if perm_candidates:
                 resolved = subprocess.run(
@@ -245,9 +259,10 @@ def _run_bruteforce(domain: str, wordlist: Path | None, outfile: Path, timeout: 
                     text=True,
                     timeout=timeout,
                 )
+                runner.save_raw(engagement_root, f"puredns_resolve_{outfile.name}", resolved.stdout, resolved.stderr)
                 found |= _clean_subdomains(resolved.stdout.splitlines(), domain)
-        except subprocess.TimeoutExpired:
-            pass  # permutation pass is best-effort; bruteforce results still count
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"dnsgen_{outfile.name}", exc.stdout or "", exc.stderr or "")
 
     runner.write_lines(outfile, sorted(found))
     return ToolResult(tool="puredns", ran=True, returncode=brute.returncode, outfile=outfile, lines=len(found))
@@ -277,11 +292,11 @@ def run_stage1(
     # 1A passive (would run in parallel in a threaded driver; sequential here
     # keeps each ToolResult's error handling simple and explicit)
     passive_results = [
-        stage.add(_run_subscraper(domain, outdir / "subscraper.txt", timeout)),
-        stage.add(_run_amass_to_file(domain, outdir / "amass_passive.txt", "passive", timeout)),
-        stage.add(_run_subfinder(domain, outdir / "subfinder.txt", timeout)),
+        stage.add(_run_subscraper(domain, outdir / "subscraper.txt", timeout, engagement_root)),
+        stage.add(_run_amass_to_file(domain, outdir / "amass_passive.txt", "passive", timeout, engagement_root)),
+        stage.add(_run_subfinder(domain, outdir / "subfinder.txt", timeout, engagement_root)),
         stage.add(_run_urlscan(domain, outdir / "urlscan_subs.txt", timeout)),
-        stage.add(_run_github_subdomains(domain, outdir / "github_subs.txt", timeout, github_token)),
+        stage.add(_run_github_subdomains(domain, outdir / "github_subs.txt", timeout, github_token, engagement_root)),
     ]
     passive_sources = [r.outfile for r in passive_results if r.outfile]
     all_passive = runner.merge_dedupe(passive_sources, outdir / "all_passive_domain.txt")
@@ -289,9 +304,9 @@ def run_stage1(
 
     # 1B active
     active_results = [
-        stage.add(_run_amass_to_file(domain, outdir / "amass_active.txt", "active", timeout)),
-        stage.add(_run_dnsx_ptr(scope_file, outdir, outdir / "reverse_dns.txt", timeout)),
-        stage.add(_run_bruteforce(domain, wordlist, outdir / "bruteforce_domain.txt", timeout)),
+        stage.add(_run_amass_to_file(domain, outdir / "amass_active.txt", "active", timeout, engagement_root)),
+        stage.add(_run_dnsx_ptr(scope_file, outdir, outdir / "reverse_dns.txt", timeout, engagement_root)),
+        stage.add(_run_bruteforce(domain, wordlist, outdir / "bruteforce_domain.txt", timeout, engagement_root)),
     ]
     # reverse_dns.txt is "ip -> hostname"; pull just the hostnames into the merge
     active_sources = [r.outfile for r in active_results if r.outfile and r.tool != "dnsx"]

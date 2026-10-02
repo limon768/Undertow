@@ -24,7 +24,7 @@ from . import runner
 from .runner import StageResult, ToolResult
 
 
-def _run_eyewitness(argv_input: list[str], outdir: Path, timeout: int, label: str) -> ToolResult:
+def _run_eyewitness(argv_input: list[str], outdir: Path, timeout: int, label: str, engagement_root: Path) -> ToolResult:
     if not runner.have("eyewitness"):
         return ToolResult(tool=f"eyewitness-{label}", ran=False, error="not installed")
 
@@ -36,9 +36,11 @@ def _run_eyewitness(argv_input: list[str], outdir: Path, timeout: int, label: st
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, f"eyewitness_{label}.txt", exc.stdout or "", exc.stderr or "")
         return ToolResult(tool=f"eyewitness-{label}", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, f"eyewitness_{label}.txt", proc.stdout, proc.stderr)
     screens_dir = outdir / "screens"
     shot_count = len(list(screens_dir.glob("*.png"))) if screens_dir.exists() else 0
     report = outdir / "report.html"
@@ -69,12 +71,12 @@ def run_stage7(
         return stage
 
     sub_outdir = engagement_root / "subdomain" / "eyewitness"
-    stage.add(_run_eyewitness(["-f", str(inscope_domain_file)], sub_outdir, timeout, label="subdomain"))
+    stage.add(_run_eyewitness(["-f", str(inscope_domain_file)], sub_outdir, timeout, label="subdomain", engagement_root=engagement_root))
 
     nmap_xml = engagement_root / "nmap" / ".nmap_raw.xml"
     nmap_outdir = engagement_root / "nmap" / "eyewitness"
     if nmap_xml.exists():
-        stage.add(_run_eyewitness(["-x", str(nmap_xml)], nmap_outdir, timeout, label="nmap"))
+        stage.add(_run_eyewitness(["-x", str(nmap_xml)], nmap_outdir, timeout, label="nmap", engagement_root=engagement_root))
     else:
         stage.add(ToolResult(tool="eyewitness-nmap", ran=False, error="no Stage 4 nmap results to screenshot (run Stage 4 first)"))
 

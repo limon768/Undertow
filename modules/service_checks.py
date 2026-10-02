@@ -88,7 +88,7 @@ def _hosts_with_port(nmap_xml_path: Path, ports: set[str]) -> list[str]:
 
 # ------------------------------------------------------------------- wpscan
 
-def _run_wpscan(hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult]:
+def _run_wpscan(hosts: list[str], outdir: Path, timeout: int, engagement_root: Path, wpscan_api_token: str | None = None) -> list[ToolResult]:
     if not runner.have("wpscan"):
         return [ToolResult(tool="wpscan", ran=False, error="not installed")]
 
@@ -99,16 +99,21 @@ def _run_wpscan(hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult
         if not url:
             continue
         any_run = True
+        argv = ["wpscan", "--url", url, "--random-user-agent", "--disable-tls-checks",
+                "--no-update", "-e", "vp,u", "--format", "cli-no-color"]
+        if wpscan_api_token:
+            argv += ["--api-token", wpscan_api_token]
         try:
             proc = subprocess.run(
-                ["wpscan", "--url", url, "--random-user-agent", "--disable-tls-checks",
-                 "--no-update", "-e", "vp,u", "--format", "cli-no-color"],
+                argv,
                 capture_output=True, text=True, timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"{host}.txt", exc.stdout or "", exc.stderr or "")
             results.append(ToolResult(tool="wpscan", ran=True, error=f"{host}: timeout after {timeout}s"))
             continue
 
+        runner.save_raw(engagement_root, f"{host}.txt", proc.stdout, proc.stderr)
         output = proc.stdout
         if "WordPress version" not in output and "is running WordPress" not in output.lower():
             continue  # not a WordPress site — no file, per the spec's "(if WordPress detected)"
@@ -125,21 +130,23 @@ def _run_wpscan(hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult
 
 # ------------------------------------------------------------------ SSL/TLS
 
-def _run_sslscan(ip: str, timeout: int) -> tuple[str, str]:
+def _run_sslscan(ip: str, timeout: int, engagement_root: Path) -> tuple[str, str]:
     """Returns (tls1.0 Yes/No, tls1.1 Yes/No) for one host, 'n/a' on failure."""
     try:
         proc = subprocess.run(
             ["sslscan", "--no-colour", ip], capture_output=True, text=True, timeout=min(timeout, 60),
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, f"sslscan_{ip}.txt", exc.stdout or "", exc.stderr or "")
         return "n/a", "n/a"
+    runner.save_raw(engagement_root, f"sslscan_{ip}.txt", proc.stdout, proc.stderr)
     out = proc.stdout
     tls10 = "Yes" if re.search(r"^TLSv1\.0\s+enabled", out, re.MULTILINE) else "No"
     tls11 = "Yes" if re.search(r"^TLSv1\.1\s+enabled", out, re.MULTILINE) else "No"
     return tls10, tls11
 
 
-def _run_ssl_checks(tls_hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult]:
+def _run_ssl_checks(tls_hosts: list[str], outdir: Path, timeout: int, engagement_root: Path) -> list[ToolResult]:
     results = []
 
     if not tls_hosts:
@@ -148,7 +155,7 @@ def _run_ssl_checks(tls_hosts: list[str], outdir: Path, timeout: int) -> list[To
     if runner.have("sslscan"):
         rows = ["# IP/FQDN                          TLS1.0   TLS1.1"]
         for ip in tls_hosts:
-            tls10, tls11 = _run_sslscan(ip, timeout)
+            tls10, tls11 = _run_sslscan(ip, timeout, engagement_root)
             rows.append(f"{ip:<35}{tls10:<9}{tls11}")
         outfile = outdir / "sslscan.txt"
         runner.write_lines(outfile, rows)
@@ -164,9 +171,11 @@ def _run_ssl_checks(tls_hosts: list[str], outdir: Path, timeout: int) -> list[To
                     ["testssl.sh", "--quiet", "--color", "0", ip],
                     capture_output=True, text=True, timeout=min(timeout, 120),
                 )
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as exc:
+                runner.save_raw(engagement_root, f"testssl_{ip}.txt", exc.stdout or "", exc.stderr or "")
                 lines.append(f"{ip} -> timeout after {min(timeout, 120)}s")
                 continue
+            runner.save_raw(engagement_root, f"testssl_{ip}.txt", proc.stdout, proc.stderr)
             issues = [
                 ANSI_RE.sub("", ln).strip()
                 for ln in proc.stdout.splitlines()
@@ -185,7 +194,7 @@ def _run_ssl_checks(tls_hosts: list[str], outdir: Path, timeout: int) -> list[To
 
 # ----------------------------------------------------------------- ssh-audit
 
-def _run_ssh_audit(ssh_hosts: list[str], outdir: Path, timeout: int) -> ToolResult:
+def _run_ssh_audit(ssh_hosts: list[str], outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not ssh_hosts:
         return ToolResult(tool="ssh-audit", ran=False, error="no in-scope hosts with 22 open")
     if not runner.have("ssh-audit"):
@@ -197,9 +206,11 @@ def _run_ssh_audit(ssh_hosts: list[str], outdir: Path, timeout: int) -> ToolResu
             proc = subprocess.run(
                 ["ssh-audit", ip], capture_output=True, text=True, timeout=min(timeout, 30),
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"ssh-audit_{ip}.txt", exc.stdout or "", exc.stderr or "")
             lines.append(f"{ip}:22 -> timeout after {min(timeout, 30)}s")
             continue
+        runner.save_raw(engagement_root, f"ssh-audit_{ip}.txt", proc.stdout, proc.stderr)
         out = ANSI_RE.sub("", proc.stdout)
         banner_m = re.search(r"banner:\s*(.+)", out)
         banner = banner_m.group(1).strip() if banner_m else "unknown banner"
@@ -214,7 +225,7 @@ def _run_ssh_audit(ssh_hosts: list[str], outdir: Path, timeout: int) -> ToolResu
 
 # ------------------------------------------------------------------ ike-scan
 
-def _run_ike_scan(ips: list[str], outdir: Path, timeout: int) -> ToolResult:
+def _run_ike_scan(ips: list[str], outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not ips:
         return ToolResult(tool="ike-scan", ran=False, error="no in-scope IPs")
     if not runner.have("ike-scan"):
@@ -228,8 +239,10 @@ def _run_ike_scan(ips: list[str], outdir: Path, timeout: int) -> ToolResult:
                 ["ike-scan", "--aggressive", "--id=test", ip],
                 capture_output=True, text=True, timeout=min(timeout, 30),
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"ike-scan_{ip}.txt", exc.stdout or "", exc.stderr or "")
             continue
+        runner.save_raw(engagement_root, f"ike-scan_{ip}.txt", proc.stdout, proc.stderr)
         out = proc.stdout
         # ike-scan never prints a literal "no response" per host — a silent
         # target just gets no result line at all, and the real signal is the
@@ -254,14 +267,14 @@ def _run_ike_scan(ips: list[str], outdir: Path, timeout: int) -> ToolResult:
 
 # --------------------------------------------------------------------- subzy
 
-def _run_subzy(inscope_domain_file: Path, outdir: Path, timeout: int) -> ToolResult:
+def _run_subzy(inscope_domain_file: Path, outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("subzy"):
         return ToolResult(tool="subzy", ran=False, error="not installed")
     hosts = runner.read_lines(inscope_domain_file)
     if not hosts:
         return ToolResult(tool="subzy", ran=False, error="INSCOPE_domain.txt is empty")
 
-    def _one_pass(extra_args: list[str]) -> dict[str, str]:
+    def _one_pass(extra_args: list[str], pass_name: str) -> dict[str, str]:
         """Returns {subdomain: VERDICT}."""
         try:
             proc = subprocess.run(
@@ -269,8 +282,10 @@ def _run_subzy(inscope_domain_file: Path, outdir: Path, timeout: int) -> ToolRes
                  "--timeout", str(min(timeout, 20)), *extra_args],
                 capture_output=True, text=True, timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, f"subzy_{pass_name}.txt", exc.stdout or "", exc.stderr or "")
             return {}
+        runner.save_raw(engagement_root, f"subzy_{pass_name}.txt", proc.stdout, proc.stderr)
         verdicts = {}
         for line in proc.stdout.splitlines():
             line = ANSI_RE.sub("", line)
@@ -285,8 +300,8 @@ def _run_subzy(inscope_domain_file: Path, outdir: Path, timeout: int) -> ToolRes
     # engagement failed this way without it). Running both passes and
     # preferring whichever actually got a real verdict covers both cases
     # without assuming every future engagement is https-only too.
-    http_verdicts = _one_pass([])
-    https_verdicts = _one_pass(["--https"])
+    http_verdicts = _one_pass([], "http")
+    https_verdicts = _one_pass(["--https"], "https")
     if not http_verdicts and not https_verdicts:
         return ToolResult(tool="subzy", ran=True, error="no output from either http or https pass")
 
@@ -310,7 +325,7 @@ def _run_subzy(inscope_domain_file: Path, outdir: Path, timeout: int) -> ToolRes
 
 # --------------------------------------------------------------- socialhunter
 
-def _run_socialhunter(urls: list[str], outdir: Path, timeout: int) -> ToolResult:
+def _run_socialhunter(urls: list[str], outdir: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not urls:
         return ToolResult(tool="socialhunter", ran=False, error="no resolvable in-scope URLs")
     if not runner.have("socialhunter"):
@@ -322,9 +337,11 @@ def _run_socialhunter(urls: list[str], outdir: Path, timeout: int) -> ToolResult
         proc = subprocess.run(
             ["socialhunter", "-f", str(url_file)], capture_output=True, text=True, timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, "socialhunter.txt", exc.stdout or "", exc.stderr or "")
         url_file.unlink(missing_ok=True)
         return ToolResult(tool="socialhunter", ran=True, error=f"timeout after {timeout}s")
+    runner.save_raw(engagement_root, "socialhunter.txt", proc.stdout, proc.stderr)
     url_file.unlink(missing_ok=True)
 
     rows = ["# Asset               Broken link                          Detail"]
@@ -420,27 +437,31 @@ def _run_clickjack(hosts: list[str], outdir: Path, timeout: int) -> ToolResult:
 
 # --------------------------------------------------------- nuclei/nikto (opt-in)
 
-def _run_nuclei(inscope_domain_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_nuclei(inscope_domain_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("nuclei"):
         return ToolResult(tool="nuclei", ran=False, error="not installed")
     hosts = runner.read_lines(inscope_domain_file)
     if not hosts:
         return ToolResult(tool="nuclei", ran=False, error="INSCOPE_domain.txt is empty")
+    timeout = runner.effective_timeout("nuclei", timeout)
     try:
         proc = subprocess.run(
             ["nuclei", "-l", str(inscope_domain_file), "-t", "http/cves/", "-t", "dns/", "-silent"],
             capture_output=True, text=True, timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="nuclei", ran=True, error=f"timeout after {timeout}s")
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = [ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip()]
     runner.write_lines(outfile, lines)
     return ToolResult(tool="nuclei", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
 
 
-def _run_nikto(hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult]:
+def _run_nikto(hosts: list[str], outdir: Path, timeout: int, engagement_root: Path) -> list[ToolResult]:
     if not runner.have("nikto"):
         return [ToolResult(tool="nikto", ran=False, error="not installed")]
+    timeout = runner.effective_timeout("nikto", timeout)
     results = []
     for host in hosts:
         url = _resolve_base_url(host, timeout)
@@ -452,9 +473,11 @@ def _run_nikto(hosts: list[str], outdir: Path, timeout: int) -> list[ToolResult]
                 ["nikto", "-host", url, "-output", str(outfile), "-Format", "txt"],
                 capture_output=True, text=True, timeout=timeout,
             )
-        except subprocess.TimeoutExpired:
+        except subprocess.TimeoutExpired as exc:
+            runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
             results.append(ToolResult(tool="nikto", ran=True, error=f"{host}: timeout after {timeout}s"))
             continue
+        runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
         lines = runner.count_lines(outfile)
         results.append(ToolResult(tool="nikto", ran=True, returncode=proc.returncode, outfile=outfile, lines=lines, detail=host))
     return results or [ToolResult(tool="nikto", ran=False, error="no in-scope host resolved over http(s)")]
@@ -469,6 +492,7 @@ def run_stage9(
     *,
     timeout: int = 180,
     vuln_scan: bool = False,
+    wpscan_api_token: str | None = None,
 ) -> StageResult:
     stage = StageResult(stage="Stage 9 — Service / Vulnerability Checks")
 
@@ -484,28 +508,28 @@ def run_stage9(
     wpscan_dir.mkdir(parents=True, exist_ok=True)
     nmap_xml = engagement_root / "nmap" / ".nmap_raw.xml"
 
-    for r in _run_wpscan(hosts, wpscan_dir, timeout):
+    for r in _run_wpscan(hosts, wpscan_dir, timeout, engagement_root, wpscan_api_token=wpscan_api_token):
         stage.add(r)
 
     tls_hosts = _hosts_with_port(nmap_xml, {"443", "8443"})
-    for r in _run_ssl_checks(tls_hosts, misc_dir, timeout):
+    for r in _run_ssl_checks(tls_hosts, misc_dir, timeout, engagement_root):
         stage.add(r)
 
     ssh_hosts = _hosts_with_port(nmap_xml, {"22"})
-    stage.add(_run_ssh_audit(ssh_hosts, misc_dir, timeout))
+    stage.add(_run_ssh_audit(ssh_hosts, misc_dir, timeout, engagement_root))
 
-    stage.add(_run_ike_scan(ips, misc_dir, timeout))
-    stage.add(_run_subzy(inscope_domain_file, misc_dir, timeout))
+    stage.add(_run_ike_scan(ips, misc_dir, timeout, engagement_root))
+    stage.add(_run_subzy(inscope_domain_file, misc_dir, timeout, engagement_root))
 
     resolved_urls = [u for h in hosts if (u := _resolve_base_url(h, timeout))]
-    stage.add(_run_socialhunter(resolved_urls, misc_dir, timeout))
+    stage.add(_run_socialhunter(resolved_urls, misc_dir, timeout, engagement_root))
 
     stage.add(_run_git_exposure(hosts, misc_dir, timeout))
     stage.add(_run_clickjack(hosts, misc_dir, timeout))
 
     if vuln_scan:
-        stage.add(_run_nuclei(inscope_domain_file, misc_dir / "nuclei.txt", timeout))
-        for r in _run_nikto(hosts, misc_dir, timeout):
+        stage.add(_run_nuclei(inscope_domain_file, misc_dir / "nuclei.txt", timeout, engagement_root))
+        for r in _run_nikto(hosts, misc_dir, timeout, engagement_root):
             stage.add(r)
 
     return stage

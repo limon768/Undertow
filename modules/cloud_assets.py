@@ -55,7 +55,7 @@ def _bucket_name_from_host(bucket_host: str) -> str:
     return S3_HOST_SUFFIX_RE.sub("", bucket_host) or bucket_host
 
 
-def _run_cloud_enum(keyword: str, outfile: Path, timeout: int) -> tuple[ToolResult, list[str]]:
+def _run_cloud_enum(keyword: str, outfile: Path, timeout: int, engagement_root: Path) -> tuple[ToolResult, list[str]]:
     """Returns (ToolResult, [public S3 bucket hostnames found])."""
     if not runner.have("cloud_enum"):
         return ToolResult(tool="cloud_enum", ran=False, error="not installed"), []
@@ -68,10 +68,12 @@ def _run_cloud_enum(keyword: str, outfile: Path, timeout: int) -> tuple[ToolResu
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         json_tmp.unlink(missing_ok=True)
         return ToolResult(tool="cloud_enum", ran=True, error=f"timeout after {timeout}s"), []
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     hits = []
     if json_tmp.exists():
         for line in json_tmp.read_text(errors="replace").splitlines():
@@ -164,7 +166,7 @@ def run_stage8(
         ))
         return stage
 
-    cloud_r, public_buckets = _run_cloud_enum(keyword, outdir / "cloud_assets.txt", timeout)
+    cloud_r, public_buckets = _run_cloud_enum(keyword, outdir / "cloud_assets.txt", timeout, engagement_root)
     stage.add(cloud_r)
     if cloud_r.outfile:
         stage.outputs["cloud_assets"] = cloud_r.outfile

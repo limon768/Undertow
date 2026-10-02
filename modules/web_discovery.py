@@ -31,7 +31,7 @@ GF_CATEGORIES = ("sqli", "xss", "lfi", "ssrf", "redirect", "idor", "rce", "ssti"
 
 # --------------------------------------------------------------- 5 · crawl + archive
 
-def _run_katana(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_katana(inscope_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("katana"):
         return ToolResult(tool="katana", ran=False, error="not installed")
     try:
@@ -41,15 +41,17 @@ def _run_katana(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="katana", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = sorted({ln.strip() for ln in proc.stdout.splitlines() if ln.strip()})
     runner.write_lines(outfile, lines)
     return ToolResult(tool="katana", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
 
 
-def _run_gau(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_gau(inscope_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("gau"):
         return ToolResult(tool="gau", ran=False, error="not installed")
     hosts = runner.read_lines(inscope_file)
@@ -61,9 +63,11 @@ def _run_gau(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="gau", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = sorted({ln.strip() for ln in proc.stdout.splitlines() if ln.strip()})
     runner.write_lines(outfile, lines)
     return ToolResult(tool="gau", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
@@ -71,9 +75,10 @@ def _run_gau(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
 
 # -------------------------------------------------------------------- params
 
-def _run_arjun(urls_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_arjun(urls_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("arjun"):
         return ToolResult(tool="arjun", ran=False, error="not installed (pipx install arjun)")
+    timeout = runner.effective_timeout("arjun", timeout)
     json_tmp = outfile.parent / ".arjun_native.json"
     try:
         proc = subprocess.run(
@@ -82,10 +87,12 @@ def _run_arjun(urls_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         json_tmp.unlink(missing_ok=True)
         return ToolResult(tool="arjun", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     if not json_tmp.exists():
         return ToolResult(tool="arjun", ran=True, returncode=proc.returncode, error=(proc.stderr or "no output").strip()[:200])
 
@@ -109,7 +116,7 @@ def _run_arjun(urls_file: Path, outfile: Path, timeout: int) -> ToolResult:
 
 # ---------------------------------------------------------- content discovery
 
-def _run_ffuf_host(host: str, wordlist: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_ffuf_host(host: str, wordlist: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     json_tmp = outfile.parent / f".ffuf_native_{host}.json"
     try:
         proc = subprocess.run(
@@ -122,10 +129,12 @@ def _run_ffuf_host(host: str, wordlist: Path, outfile: Path, timeout: int) -> To
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         json_tmp.unlink(missing_ok=True)
         return ToolResult(tool="ffuf", ran=True, error=f"timeout after {timeout}s ({host})")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     if not json_tmp.exists():
         return ToolResult(tool="ffuf", ran=True, returncode=proc.returncode, error=f"no output for {host}")
 
@@ -146,7 +155,7 @@ def _run_ffuf_host(host: str, wordlist: Path, outfile: Path, timeout: int) -> To
     return ToolResult(tool="ffuf", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines), detail=host)
 
 
-def _run_ffuf(hosts: list[str], outdir: Path, wordlist: Path | None, timeout: int) -> list[ToolResult]:
+def _run_ffuf(hosts: list[str], outdir: Path, wordlist: Path | None, timeout: int, engagement_root: Path) -> list[ToolResult]:
     wl = wordlist or DEFAULT_FFUF_WORDLIST
     if not runner.have("ffuf"):
         return [ToolResult(tool="ffuf", ran=False, error="not installed")]
@@ -154,12 +163,12 @@ def _run_ffuf(hosts: list[str], outdir: Path, wordlist: Path | None, timeout: in
         return [ToolResult(tool="ffuf", ran=False, error=f"wordlist not found: {wl}")]
 
     outdir.mkdir(parents=True, exist_ok=True)
-    return [_run_ffuf_host(host, wl, outdir / f"ffuf_{host}.txt", timeout) for host in hosts]
+    return [_run_ffuf_host(host, wl, outdir / f"ffuf_{host}.txt", timeout, engagement_root) for host in hosts]
 
 
 # ------------------------------------------------------------------- cariddi
 
-def _run_cariddi(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_cariddi(inscope_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("cariddi"):
         return ToolResult(tool="cariddi", ran=False, error="not installed")
     hosts = runner.read_lines(inscope_file)
@@ -171,9 +180,11 @@ def _run_cariddi(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool="cariddi", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = [ln.rstrip() for ln in proc.stdout.splitlines() if ln.strip()]
     runner.write_lines(outfile, lines)
     return ToolResult(tool="cariddi", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
@@ -181,7 +192,7 @@ def _run_cariddi(inscope_file: Path, outfile: Path, timeout: int) -> ToolResult:
 
 # ------------------------------------------------------------------ WAF/403
 
-def _run_waf_403_split(inscope_file: Path, outdir: Path, timeout: int) -> list[ToolResult]:
+def _run_waf_403_split(inscope_file: Path, outdir: Path, timeout: int, engagement_root: Path) -> list[ToolResult]:
     if not runner.have("httpx"):
         return [ToolResult(tool="httpx-waf", ran=False, error="not installed")]
     hosts = runner.read_lines(inscope_file)
@@ -193,9 +204,11 @@ def _run_waf_403_split(inscope_file: Path, outdir: Path, timeout: int) -> list[T
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, "waf_403_probe.txt", exc.stdout or "", exc.stderr or "")
         return [ToolResult(tool="httpx-waf", ran=True, error=f"timeout after {timeout}s")]
 
+    runner.save_raw(engagement_root, "waf_403_probe.txt", proc.stdout, proc.stderr)
     nowaf, has_403 = [], []
     for line in proc.stdout.splitlines():
         try:
@@ -222,7 +235,7 @@ def _run_waf_403_split(inscope_file: Path, outdir: Path, timeout: int) -> list[T
 
 # --------------------------------------------------------- 5.1 gf vuln triage
 
-def _run_gf(category: str, urls_file: Path, outfile: Path, timeout: int) -> ToolResult:
+def _run_gf(category: str, urls_file: Path, outfile: Path, timeout: int, engagement_root: Path) -> ToolResult:
     if not runner.have("gf"):
         return ToolResult(tool=f"gf-{category}", ran=False, error="not installed")
     urls = runner.read_lines(urls_file)
@@ -234,9 +247,11 @@ def _run_gf(category: str, urls_file: Path, outfile: Path, timeout: int) -> Tool
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, outfile.name, exc.stdout or "", exc.stderr or "")
         return ToolResult(tool=f"gf-{category}", ran=True, error=f"timeout after {timeout}s")
 
+    runner.save_raw(engagement_root, outfile.name, proc.stdout, proc.stderr)
     lines = sorted({ln.strip() for ln in proc.stdout.splitlines() if ln.strip()})
     runner.write_lines(outfile, lines)
     return ToolResult(tool=f"gf-{category}", ran=True, returncode=proc.returncode, outfile=outfile, lines=len(lines))
@@ -263,26 +278,26 @@ def run_stage5(
         stage.add(ToolResult(tool="web_discovery", ran=False, error="INSCOPE_domain.txt is empty — nothing to crawl"))
         return stage
 
-    katana_r = stage.add(_run_katana(inscope_domain_file, loot_dir / "katana.txt", timeout))
-    gau_r = stage.add(_run_gau(inscope_domain_file, loot_dir / "gau.txt", timeout))
+    katana_r = stage.add(_run_katana(inscope_domain_file, loot_dir / "katana.txt", timeout, engagement_root))
+    gau_r = stage.add(_run_gau(inscope_domain_file, loot_dir / "gau.txt", timeout, engagement_root))
 
     url_sources = [r.outfile for r in (katana_r, gau_r) if r.outfile]
     urls_file = runner.merge_dedupe(url_sources, loot_dir / "urls.txt")
     stage.outputs["urls"] = urls_file
 
-    stage.add(_run_arjun(urls_file, loot_dir / "arjun.txt", timeout))
+    stage.add(_run_arjun(urls_file, loot_dir / "arjun.txt", timeout, engagement_root))
 
-    for r in _run_ffuf(hosts, dirbrute_dir, ffuf_wordlist, timeout):
+    for r in _run_ffuf(hosts, dirbrute_dir, ffuf_wordlist, timeout, engagement_root):
         stage.add(r)
 
-    stage.add(_run_cariddi(inscope_domain_file, loot_dir / "cariddi.txt", timeout))
+    stage.add(_run_cariddi(inscope_domain_file, loot_dir / "cariddi.txt", timeout, engagement_root))
 
-    for r in _run_waf_403_split(inscope_domain_file, subdomain_dir, timeout):
+    for r in _run_waf_403_split(inscope_domain_file, subdomain_dir, timeout, engagement_root):
         stage.add(r)
 
     vuln_dir = loot_dir / "vuln_candidates"
     vuln_dir.mkdir(parents=True, exist_ok=True)
     for category in GF_CATEGORIES:
-        stage.add(_run_gf(category, urls_file, vuln_dir / f"{category}.txt", timeout))
+        stage.add(_run_gf(category, urls_file, vuln_dir / f"{category}.txt", timeout, engagement_root))
 
     return stage

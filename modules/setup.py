@@ -12,6 +12,7 @@ DIRS = [
     "subdomain/eyewitness/source",
     "wpscan",
     "MISC",
+    "RAW",
 ]
 
 FILES = ["Note.txt", "scope.txt", "web_scope.txt", "out-of-scope.txt"]

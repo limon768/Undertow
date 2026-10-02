@@ -58,10 +58,12 @@ def run_stage2(all_domain_file: Path, engagement_root: Path, *, timeout: int = 3
             text=True,
             timeout=timeout,
         )
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as exc:
+        runner.save_raw(engagement_root, alive_file.name, exc.stdout or "", exc.stderr or "")
         stage.add(ToolResult(tool="httpx", ran=True, error=f"timeout after {timeout}s"))
         return stage
 
+    runner.save_raw(engagement_root, alive_file.name, proc.stdout, proc.stderr)
     alive_lines = []
     login_lines = []
     for line in proc.stdout.splitlines():
