@@ -10,8 +10,7 @@ __pycache__/
 *.log
 *.pyc
 
-# Token config — never commit a filled-in copy (.undertow.config.example is
-# the tracked template).
+# Token config — never commit a filled-in copy.
 .undertow.config
 
 # Real engagement directories (e.g. Client_Name_YYYYMMDD/) must never be

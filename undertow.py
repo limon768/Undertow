@@ -276,8 +276,8 @@ def main():
     general_group.add_argument(
         "--config", metavar="PATH",
         help="KEY=VALUE token config file (GITHUB_TOKEN, WPSCAN_API_TOKEN). Default: "
-        ".undertow.config in the repo root (see .undertow.config.example). A matching "
-        "--xxx-token flag always overrides the config file value",
+        ".undertow.config in the repo root. A matching --xxx-token flag always "
+        "overrides the config file value",
     )
 
     tools_group = parser.add_argument_group("stage 0 — tool check")
