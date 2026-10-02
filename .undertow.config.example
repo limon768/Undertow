@@ -1,9 +1,0 @@
-# UNDERTOW token config. Copy this file to .undertow.config in the repo root
-# (next to undertow.py) and fill in real values — or pass --config PATH to
-# point at a copy kept somewhere else. Never commit a filled-in copy of this
-# file.
-#
-# A --xxx-token CLI flag always overrides the matching key below.
-
-GITHUB_TOKEN=
-WPSCAN_API_TOKEN=
